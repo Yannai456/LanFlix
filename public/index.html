@@ -4,18 +4,75 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lanflix</title>
+<script>
+  (function () {
+    var saved = localStorage.getItem("homeflix-theme");
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+  })();
+</script>
 <style>
-  :root {
+  :root, html[data-theme="ocean"] {
     --bg: #0a0e12;
     --panel: #101820;
+    --rule: #1c2933;
+    --text: #dceef0;
+    --text-dim: #7d94a0;
     --teal: #2dd4c8;
     --blue: #3b82f6;
     --accent-dim: #23566b;
-    --text: #dceef0;
-    --text-dim: #7d94a0;
-    --rule: #1c2933;
-    --gradient: linear-gradient(135deg, var(--teal), var(--blue));
     --gradient-glow: linear-gradient(135deg, #8b5cf6, #22d3ee, #3b82f6);
+  }
+
+  html[data-theme="sunset"] {
+    --bg: #150b12;
+    --panel: #1f0f1a;
+    --rule: #331c29;
+    --text: #f7e6f0;
+    --text-dim: #a8839a;
+    --teal: #f472b6;
+    --blue: #a855f7;
+    --accent-dim: #7a3f66;
+    --gradient-glow: linear-gradient(135deg, #f97316, #f472b6, #a855f7);
+  }
+
+  html[data-theme="grape"] {
+    --bg: #0e0a16;
+    --panel: #160f22;
+    --rule: #271a3a;
+    --text: #ece6f7;
+    --text-dim: #8f81a8;
+    --teal: #8b5cf6;
+    --blue: #d946ef;
+    --accent-dim: #4c3170;
+    --gradient-glow: linear-gradient(135deg, #d946ef, #8b5cf6, #6366f1);
+  }
+
+  html[data-theme="ember"] {
+    --bg: #170e08;
+    --panel: #21140b;
+    --rule: #3a2415;
+    --text: #fde9d9;
+    --text-dim: #b6907a;
+    --teal: #fb923c;
+    --blue: #ef4444;
+    --accent-dim: #7a3a1c;
+    --gradient-glow: linear-gradient(135deg, #f97316, #ef4444, #eab308);
+  }
+
+  html[data-theme="light"] {
+    --bg: #f4f6f9;
+    --panel: #ffffff;
+    --rule: #e1e7ee;
+    --text: #131b22;
+    --text-dim: #5c6b78;
+    --teal: #0891a3;
+    --blue: #4f46e5;
+    --accent-dim: #b9c4cf;
+    --gradient-glow: linear-gradient(135deg, #8b5cf6, #0891a3, #4f46e5);
+  }
+
+  :root {
+    --gradient: linear-gradient(135deg, var(--teal), var(--blue));
   }
 
   * { box-sizing: border-box; }
@@ -103,7 +160,63 @@
     border-color: transparent;
   }
 
-  /* Category chip row */
+  #settings-btn {
+    background: transparent;
+    border: 1px solid var(--rule);
+    color: var(--text-dim);
+    font-size: 15px;
+    width: 36px;
+    height: 36px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  #settings-btn:hover {
+    border-color: var(--accent-dim);
+    color: var(--text);
+  }
+
+  #settings-modal .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .theme-swatch {
+    background: var(--bg);
+    border: 2px solid var(--rule);
+    border-radius: 8px;
+    padding: 10px 8px;
+    cursor: pointer;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .theme-swatch:hover {
+    border-color: var(--accent-dim);
+  }
+
+  .theme-swatch.active {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 1px var(--teal);
+  }
+
+  .theme-swatch .swatch-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+  }
+
+  .theme-swatch .swatch-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+  }
+
   #categories {
     padding: 16px 5vw 0;
     display: flex;
@@ -157,7 +270,6 @@
     color: #8b5cf6;
   }
 
-  /* Assign-to-category banner */
   #assign-banner {
     display: none;
     margin: 14px 5vw 0;
@@ -380,7 +492,6 @@
     color: var(--teal);
   }
 
-  /* Full-page drag-and-drop indicator */
   #dropzone {
     display: none;
     position: fixed;
@@ -400,7 +511,6 @@
     display: flex;
   }
 
-  /* Upload progress list */
   #uploads {
     margin: 0 0 22px;
     display: flex;
@@ -445,7 +555,6 @@
     color: #d98070;
   }
 
-  /* Tag editor modal */
   #tag-modal-overlay {
     display: none;
     position: fixed;
@@ -458,6 +567,100 @@
 
   #tag-modal-overlay.open {
     display: flex;
+  }
+
+  #settings-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 30;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #settings-modal-overlay.open {
+    display: flex;
+  }
+
+  #settings-modal {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px;
+    width: min(420px, 90vw);
+  }
+
+  #settings-modal h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  #settings-modal p {
+    margin: 0 0 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  @media (max-width: 640px) {
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+      gap: 10px;
+    }
+
+    .card {
+      border-radius: 10px;
+    }
+
+    .card-badge {
+      font-size: 8px;
+      padding: 2px 7px;
+      margin-bottom: 5px;
+    }
+
+    .card-thumb-title {
+      font-size: 12px;
+    }
+
+    .card-thumb-overlay {
+      padding: 8px 7px 7px;
+    }
+
+    .card-body {
+      padding: 7px 8px 9px;
+    }
+
+    .card-meta {
+      font-size: 10px;
+    }
+
+    .delete-btn, .assign-check {
+      width: 20px;
+      height: 20px;
+      font-size: 10px;
+      top: 5px;
+    }
+
+    .delete-btn { right: 5px; }
+    .assign-check { left: 5px; }
+
+    .tag-pill {
+      font-size: 9px;
+      padding: 1px 6px;
+    }
+
+    header {
+      padding: 18px 4vw 14px;
+    }
+
+    #categories {
+      padding: 12px 4vw 0;
+    }
+
+    main {
+      padding: 14px 4vw 40px;
+    }
   }
 
   #tag-modal {
@@ -479,6 +682,43 @@
     margin: 0 0 14px;
     font-size: 12px;
     color: var(--text-dim);
+  }
+
+  .field-label {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .name-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  #name-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    color: var(--text);
+    font-size: 13px;
+    padding: 10px 12px;
+    border-radius: 3px;
+    outline: none;
+    min-width: 0;
+  }
+
+  #name-input:focus {
+    border-color: var(--teal);
+  }
+
+  #name-ext {
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
   }
 
   #tag-input {
@@ -520,7 +760,6 @@
     font-weight: 600;
   }
 
-  /* Player overlay */
   #player-overlay {
     display: none;
     position: fixed;
@@ -572,7 +811,6 @@
     border-radius: 3px;
   }
 
-  /* Music player: album-art circle + bar visualizer */
   #music-player {
     display: none;
     flex-direction: column;
@@ -622,7 +860,6 @@
     max-width: 480px;
   }
 
-  /* Gamepad connection indicator */
   #gamepad-indicator {
     display: none;
     position: fixed;
@@ -653,7 +890,8 @@
   <div class="header-controls">
     <input type="text" id="search-input" placeholder="Search…">
     <input type="file" id="file-input" accept="video/mp4,.mp4,.webm,.mkv,.mov,.m4v,.mp3,.wav,.flac,.m4a,.ogg,.aac" multiple hidden>
-    <button id="upload-btn">+ ADD VIDEO</button>
+    <button id="upload-btn">+ Add Video</button>
+    <button id="settings-btn" title="Settings">⚙</button>
   </div>
 </header>
 
@@ -675,11 +913,30 @@
 <div id="tag-modal-overlay">
   <div id="tag-modal">
     <h3 id="tag-modal-title"></h3>
-    <p>Comma-separated categories. A video can belong to as many as you like.</p>
+    <p>Rename the file and/or edit which categories it belongs to.</p>
+
+    <div class="field-label">File name</div>
+    <div class="name-edit-row">
+      <input type="text" id="name-input">
+      <span id="name-ext"></span>
+    </div>
+
+    <div class="field-label">Categories</div>
     <input type="text" id="tag-input" placeholder="e.g. comedy, 90s, favorites">
-    <div class="modal-actions">
+    <div class="modal-actions" style="margin-top:14px">
       <button id="tag-cancel">CANCEL</button>
       <button id="tag-save">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<div id="settings-modal-overlay">
+  <div id="settings-modal">
+    <h3>Settings</h3>
+    <p>Pick a color theme. It's saved on this device.</p>
+    <div class="theme-grid" id="theme-grid"></div>
+    <div class="modal-actions">
+      <button id="settings-close">DONE</button>
     </div>
   </div>
 </div>

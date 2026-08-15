@@ -14,12 +14,8 @@ const MEDIA_EXTENSIONS = new Set([...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS]);
 
 app.use(express.json());
 
-// Make sure the video folder actually exists before we try to write into it
 fs.mkdirSync(VIDEO_DIR, { recursive: true });
 
-// --- Tag storage: a video can belong to many categories at once. ---
-// Stored as { "filename.mp4": ["category1", "category2"] } in a JSON file
-// that lives inside VIDEO_DIR, so tags travel with the folder.
 function loadTags() {
   try {
     return JSON.parse(fs.readFileSync(TAGS_FILE, "utf8"));
@@ -32,11 +28,9 @@ function saveTags(tags) {
   fs.writeFileSync(TAGS_FILE, JSON.stringify(tags, null, 2));
 }
 
-// --- Upload config: write straight into VIDEO_DIR, keep the original filename ---
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, VIDEO_DIR),
   filename: (req, file, cb) => {
-    // Avoid overwriting an existing file with the same name
     const ext = path.extname(file.originalname);
     const base = path.basename(file.originalname, ext).replace(/[/\\]/g, "_");
     let candidate = base + ext;
@@ -51,7 +45,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 20 * 1024 * 1024 * 1024 }, // 20 GB ceiling, adjust as needed
+  limits: { fileSize: 20 * 1024 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!MEDIA_EXTENSIONS.has(ext)) {
@@ -61,10 +55,8 @@ const upload = multer({
   },
 });
 
-// Serve the frontend (index.html, style.css, app.js)
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- API: list all video files in VIDEO_DIR, with their tags ---
 app.get("/api/videos", (req, res) => {
   fs.readdir(VIDEO_DIR, { withFileTypes: true }, (err, entries) => {
     if (err) {
@@ -93,7 +85,6 @@ app.get("/api/videos", (req, res) => {
   });
 });
 
-// --- API: get every distinct category currently in use ---
 app.get("/api/categories", (req, res) => {
   const tags = loadTags();
   const all = new Set();
@@ -101,7 +92,6 @@ app.get("/api/categories", (req, res) => {
   res.json([...all].sort((a, b) => a.localeCompare(b)));
 });
 
-// --- API: set the full tag list for one video (a video can be in many categories) ---
 app.put("/api/videos/:filename/tags", (req, res) => {
   const filename = path.basename(req.params.filename);
   const filePath = path.join(VIDEO_DIR, filename);
@@ -128,7 +118,6 @@ app.put("/api/videos/:filename/tags", (req, res) => {
   res.json({ filename, tags: cleaned });
 });
 
-// --- API: upload a new video into VIDEO_DIR ---
 app.post("/api/upload", (req, res) => {
   upload.single("video")(req, res, (err) => {
     if (err) {
@@ -142,7 +131,49 @@ app.post("/api/upload", (req, res) => {
   });
 });
 
-// --- API: delete a video from disk (and its tag entry) ---
+app.put("/api/videos/:filename/rename", (req, res) => {
+  const oldFilename = path.basename(req.params.filename);
+  const oldPath = path.join(VIDEO_DIR, oldFilename);
+
+  if (!fs.existsSync(oldPath)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  const ext = path.extname(oldFilename);
+  let newBase = String(req.body.newName || "").trim().replace(/[\/\\]/g, "_");
+
+  if (!newBase) {
+    return res.status(400).json({ error: "Name cannot be empty" });
+  }
+
+  const newFilename = newBase + ext;
+  const newPath = path.join(VIDEO_DIR, newFilename);
+
+  if (newFilename === oldFilename) {
+    return res.json({ oldFilename, newFilename });
+  }
+
+  if (fs.existsSync(newPath)) {
+    return res.status(409).json({ error: "A file with that name already exists" });
+  }
+
+  fs.rename(oldPath, newPath, (err) => {
+    if (err) {
+      console.error("Rename failed:", err.message);
+      return res.status(500).json({ error: "Could not rename file" });
+    }
+
+    const tags = loadTags();
+    if (tags[oldFilename]) {
+      tags[newFilename] = tags[oldFilename];
+      delete tags[oldFilename];
+      saveTags(tags);
+    }
+
+    res.json({ oldFilename, newFilename });
+  });
+});
+
 app.delete("/api/videos/:filename", (req, res) => {
   const filename = path.basename(req.params.filename);
   const filePath = path.join(VIDEO_DIR, filename);
@@ -167,9 +198,8 @@ app.delete("/api/videos/:filename", (req, res) => {
   });
 });
 
-// --- Stream a specific video, with range support so seeking/scrubbing works ---
 app.get("/stream/:filename", (req, res) => {
-  const filename = path.basename(req.params.filename); // prevent path traversal
+  const filename = path.basename(req.params.filename);
   const filePath = path.join(VIDEO_DIR, filename);
 
   if (!MEDIA_EXTENSIONS.has(path.extname(filename).toLowerCase())) {
@@ -184,7 +214,6 @@ app.get("/stream/:filename", (req, res) => {
     const contentType = getContentType(filename);
 
     if (!range) {
-      // No range header: send the whole file (rare — most browsers send range requests)
       res.writeHead(200, {
         "Content-Length": fileSize,
         "Content-Type": contentType,
@@ -192,7 +221,6 @@ app.get("/stream/:filename", (req, res) => {
       return fs.createReadStream(filePath).pipe(res);
     }
 
-    // Parse "bytes=start-end"
     const parts = range.replace(/bytes=/, "").split("-");
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;

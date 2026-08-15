@@ -22,16 +22,19 @@ const assignDoneBtn = document.getElementById("assign-done");
 const musicPlayer = document.getElementById("music-player");
 const audioEl = document.getElementById("audio-el");
 const visualizerCanvas = document.getElementById("visualizer");
+const nameInput = document.getElementById("name-input");
+const nameExt = document.getElementById("name-ext");
+const settingsBtn = document.getElementById("settings-btn");
+const settingsOverlay = document.getElementById("settings-modal-overlay");
+const settingsCloseBtn = document.getElementById("settings-close");
+const themeGrid = document.getElementById("theme-grid");
 
-let allVideos = [];        // everything the server returned
-let activeCategory = null; // null = "All"
+let allVideos = [];
+let activeCategory = null;
 let searchTerm = "";
 let editingFilename = null;
-let assignMode = null;     // category name currently being assigned, or null
-
-// ---------------------------------------------------------------
-// Library loading, filtering, category chips
-// ---------------------------------------------------------------
+let editingExt = "";
+let assignMode = null;
 
 function formatSize(bytes) {
   const gb = bytes / (1024 ** 3);
@@ -39,6 +42,51 @@ function formatSize(bytes) {
   const mb = bytes / (1024 ** 2);
   return mb.toFixed(0) + " MB";
 }
+
+const THEMES = [
+  { id: "ocean", name: "Ocean", a: "#2dd4c8", b: "#3b82f6" },
+  { id: "sunset", name: "Sunset", a: "#f472b6", b: "#a855f7" },
+  { id: "grape", name: "Grape", a: "#8b5cf6", b: "#d946ef" },
+  { id: "ember", name: "Ember", a: "#fb923c", b: "#ef4444" },
+  { id: "light", name: "Light", a: "#0891a3", b: "#4f46e5" },
+];
+
+function getCurrentTheme() {
+  return localStorage.getItem("homeflix-theme") || "ocean";
+}
+
+function applyTheme(themeId) {
+  document.documentElement.setAttribute("data-theme", themeId);
+  localStorage.setItem("homeflix-theme", themeId);
+  renderThemeGrid();
+}
+
+function renderThemeGrid() {
+  const current = getCurrentTheme();
+  themeGrid.innerHTML = "";
+
+  THEMES.forEach((theme) => {
+    const swatch = document.createElement("div");
+    swatch.className = "theme-swatch" + (current === theme.id ? " active" : "");
+    swatch.innerHTML = `
+      <div class="swatch-dot" style="background: linear-gradient(135deg, ${theme.a}, ${theme.b});"></div>
+      <div class="swatch-label">${theme.name}</div>
+    `;
+    swatch.addEventListener("click", () => applyTheme(theme.id));
+    themeGrid.appendChild(swatch);
+  });
+}
+
+settingsBtn.addEventListener("click", () => {
+  renderThemeGrid();
+  settingsOverlay.classList.add("open");
+});
+
+settingsCloseBtn.addEventListener("click", () => settingsOverlay.classList.remove("open"));
+
+settingsOverlay.addEventListener("click", (e) => {
+  if (e.target === settingsOverlay) settingsOverlay.classList.remove("open");
+});
 
 async function loadLibrary() {
   try {
@@ -100,7 +148,7 @@ function renderCategories() {
 
 function startAssignMode(category) {
   assignMode = category;
-  activeCategory = null; // show the full library while assigning
+  activeCategory = null;
   searchInput.value = "";
   searchTerm = "";
   assignCategoryName.textContent = category;
@@ -126,7 +174,7 @@ async function toggleAssignMembership(video) {
       body: JSON.stringify({ tags: newTags }),
     });
     if (!res.ok) throw new Error("Server error " + res.status);
-    video.tags = newTags; // update local copy so the checkmark flips instantly
+    video.tags = newTags;
     renderGrid();
   } catch (err) {
     alert("Couldn't update category: " + err.message);
@@ -245,32 +293,61 @@ searchInput.addEventListener("input", () => {
   renderGrid();
 });
 
-// ---------------------------------------------------------------
-// Tag editor modal
-// ---------------------------------------------------------------
-
 function openTagEditor(video) {
   editingFilename = video.filename;
+  const dot = video.filename.lastIndexOf(".");
+  editingExt = dot >= 0 ? video.filename.slice(dot) : "";
+  const base = dot >= 0 ? video.filename.slice(0, dot) : video.filename;
+
   tagModalTitle.textContent = video.title;
+  nameInput.value = base;
+  nameExt.textContent = editingExt;
   tagInput.value = video.tags.join(", ");
   tagModalOverlay.classList.add("open");
-  tagInput.focus();
+  nameInput.focus();
+  nameInput.select();
 }
 
 function closeTagEditor() {
   tagModalOverlay.classList.remove("open");
   editingFilename = null;
+  editingExt = "";
 }
 
 async function saveTagEditor() {
   if (!editingFilename) return;
+
+  const newBase = nameInput.value.trim();
+  if (!newBase) {
+    alert("File name can't be empty.");
+    return;
+  }
+
+  let currentFilename = editingFilename;
+
+  if (newBase !== editingFilename.slice(0, editingFilename.length - editingExt.length)) {
+    try {
+      const res = await fetch(`/api/videos/${encodeURIComponent(editingFilename)}/rename`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newName: newBase }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Server error " + res.status);
+      currentFilename = data.newFilename;
+    } catch (err) {
+      alert("Couldn't rename file: " + err.message);
+      return;
+    }
+  }
+
   const tags = tagInput.value
     .split(",")
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
 
   try {
-    const res = await fetch(`/api/videos/${encodeURIComponent(editingFilename)}/tags`, {
+    const res = await fetch(`/api/videos/${encodeURIComponent(currentFilename)}/tags`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tags }),
@@ -290,9 +367,10 @@ tagInput.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeTagEditor();
 });
 
-// ---------------------------------------------------------------
-// Upload: button + file picker + drag-and-drop
-// ---------------------------------------------------------------
+nameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") saveTagEditor();
+  if (e.key === "Escape") closeTagEditor();
+});
 
 uploadBtn.addEventListener("click", () => fileInput.click());
 
@@ -383,10 +461,6 @@ function handleUploadError(row, message) {
   row.querySelector(".name span").title = text;
 }
 
-// ---------------------------------------------------------------
-// Player
-// ---------------------------------------------------------------
-
 function isMusicMode(video) {
   if (video.kind === "audio") return true;
   return video.tags.some((t) => t.toLowerCase() === "music");
@@ -437,19 +511,13 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && overlay.classList.contains("open")) closePlayer();
 });
 
-// ---------------------------------------------------------------
-// Bar visualizer — Web Audio API AnalyserNode driving a canvas.
-// The MediaElementSourceNode can only be created once per <audio>
-// element, so it (and the AudioContext) are created lazily and reused.
-// ---------------------------------------------------------------
-
 let audioCtx = null;
 let analyser = null;
 let sourceNode = null;
 let visualizerFrame = null;
 
 function ensureAudioGraph() {
-  if (sourceNode) return; // already wired up
+  if (sourceNode) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   sourceNode = audioCtx.createMediaElementSource(audioEl);
   analyser = audioCtx.createAnalyser();
@@ -484,7 +552,7 @@ function startVisualizer() {
     const barWidth = (cssWidth - gap * (barCount - 1)) / barCount;
 
     for (let i = 0; i < barCount; i++) {
-      const value = dataArray[i] / 255; // 0..1
+      const value = dataArray[i] / 255;
       const barHeight = Math.max(3, value * cssHeight);
       const x = i * (barWidth + gap);
       const y = cssHeight - barHeight;
@@ -515,19 +583,9 @@ function stopVisualizer() {
   }
 }
 
-// ---------------------------------------------------------------
-// Controller navigation (Steam Deck, Xbox/PlayStation-style pads, etc.)
-// Standard "standard" gamepad mapping:
-//   buttons[0] = A / bottom face button   -> select
-//   buttons[1] = B / right face button    -> back / close
-//   buttons[12..15] = D-pad up/down/left/right
-//   buttons[4]/[5] = left/right bumper    -> cycle category filter
-//   axes[0]/[1] = left stick x/y          -> also navigates the grid
-// ---------------------------------------------------------------
-
 let gamepadFocusIndex = 0;
 let gamepadConnected = false;
-const buttonState = {}; // tracks held/repeat timing per button index
+const buttonState = {};
 
 function resetGamepadFocus() {
   gamepadFocusIndex = 0;
@@ -573,18 +631,16 @@ function cycleCategory(direction) {
   chips[next].click();
 }
 
-// Edge + repeat detection so holding a direction scrolls smoothly
-// without firing every single frame.
 function buttonPressed(index, pressed, now) {
   const state = buttonState[index] || { held: false, nextRepeat: 0 };
   let fire = false;
 
   if (pressed && !state.held) {
     fire = true;
-    state.nextRepeat = now + 380; // initial delay before repeat kicks in
+    state.nextRepeat = now + 380;
   } else if (pressed && state.held && now >= state.nextRepeat) {
     fire = true;
-    state.nextRepeat = now + 140; // repeat rate while held
+    state.nextRepeat = now + 140;
   }
 
   state.held = pressed;
@@ -679,6 +735,8 @@ window.addEventListener("gamepaddisconnected", () => {
   gamepadConnected = false;
   gamepadIndicator.classList.remove("connected");
 });
+
+document.documentElement.setAttribute("data-theme", getCurrentTheme());
 
 requestAnimationFrame(pollGamepad);
 
