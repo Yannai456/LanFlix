@@ -1,12 +1,3 @@
-// homeflix — a tiny self-hosted video streaming server for your home network
-//
-// Usage:
-//   VIDEO_DIR="/path/to/your/movies" node server.js
-//   (defaults to ./videos if VIDEO_DIR isn't set)
-//
-// Then on any device on your home network, visit:
-//   http://<this-computer's-LAN-IP>:8000
-
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
