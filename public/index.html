@@ -800,6 +800,50 @@
     display: block;
   }
 
+  #buffer-spinner {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    pointer-events: none;
+    background: rgba(0,0,0,0.15);
+  }
+
+  #buffer-spinner.active {
+    display: flex;
+  }
+
+  #music-art {
+    position: relative;
+  }
+
+  #music-spinner {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #music-spinner.active {
+    display: flex;
+  }
+
+  .spinner-ring {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.2);
+    border-top-color: var(--teal);
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
   @media (max-width: 640px) {
     .grid {
       grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
@@ -1130,7 +1174,7 @@
     <div class="toggle-row">
       <div>
         <div class="toggle-title">Video enhance</div>
-        <div class="toggle-desc">GPU video enhancments. May look better at the cost of breaking traditional media controls.</div>
+        <div class="toggle-desc">GPU sharpening filter while playing — no extra detail is invented. Off by default.</div>
       </div>
       <button id="enhance-toggle" class="toggle-switch" role="switch" aria-checked="false"><span class="toggle-knob"></span></button>
     </div>
@@ -1144,17 +1188,19 @@
 <div id="player-overlay">
   <div class="player-top">
     <div id="player-title"></div>
-    <button id="close-player">✕ Close</button>
+    <button id="close-player">✕ CLOSE</button>
   </div>
   <div id="video-wrap">
     <video id="video-el" controls autoplay></video>
     <canvas id="enhance-canvas"></canvas>
     <div id="enhance-badge">✨ ENHANCED</div>
+    <div id="buffer-spinner"><div class="spinner-ring"></div></div>
   </div>
 
   <div id="music-player">
     <div id="music-art">
       <div id="music-note">♪</div>
+      <div id="music-spinner"><div class="spinner-ring"></div></div>
     </div>
     <canvas id="visualizer"></canvas>
     <audio id="audio-el" controls autoplay></audio>

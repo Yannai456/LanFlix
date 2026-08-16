@@ -32,6 +32,8 @@ const enhanceToggle = document.getElementById("enhance-toggle");
 const videoWrap = document.getElementById("video-wrap");
 const enhanceCanvas = document.getElementById("enhance-canvas");
 const enhanceBadge = document.getElementById("enhance-badge");
+const bufferSpinner = document.getElementById("buffer-spinner");
+const musicSpinner = document.getElementById("music-spinner");
 
 let allVideos = [];
 let activeCategory = null;
@@ -492,6 +494,16 @@ function isMusicMode(video) {
   return video.tags.some((t) => t.toLowerCase() === "music");
 }
 
+videoEl.addEventListener("waiting", () => bufferSpinner.classList.add("active"));
+videoEl.addEventListener("loadstart", () => bufferSpinner.classList.add("active"));
+videoEl.addEventListener("playing", () => bufferSpinner.classList.remove("active"));
+videoEl.addEventListener("canplay", () => bufferSpinner.classList.remove("active"));
+
+audioEl.addEventListener("waiting", () => musicSpinner.classList.add("active"));
+audioEl.addEventListener("loadstart", () => musicSpinner.classList.add("active"));
+audioEl.addEventListener("playing", () => musicSpinner.classList.remove("active"));
+audioEl.addEventListener("canplay", () => musicSpinner.classList.remove("active"));
+
 function openPlayer(video) {
   playerTitle.textContent = video.title;
 
@@ -538,6 +550,8 @@ function closePlayer() {
   videoEl.style.display = "";
   stopVisualizer();
   stopEnhance();
+  bufferSpinner.classList.remove("active");
+  musicSpinner.classList.remove("active");
 }
 
 closeBtn.addEventListener("click", closePlayer);

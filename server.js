@@ -55,7 +55,12 @@ const upload = multer({
   },
 });
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), {
+  etag: true,
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "no-cache");
+  },
+}));
 
 app.get("/api/videos", (req, res) => {
   fs.readdir(VIDEO_DIR, { withFileTypes: true }, (err, entries) => {
@@ -210,15 +215,30 @@ app.get("/stream/:filename", (req, res) => {
     if (err) return res.status(404).send("File not found");
 
     const fileSize = stats.size;
-    const range = req.headers.range;
     const contentType = getContentType(filename);
+    const etag = `"${fileSize}-${stats.mtimeMs}"`;
+    const lastModified = stats.mtime.toUTCString();
+
+    res.setHeader("ETag", etag);
+    res.setHeader("Last-Modified", lastModified);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("Accept-Ranges", "bytes");
+
+    const ifNoneMatch = req.headers["if-none-match"];
+    const ifModifiedSince = req.headers["if-modified-since"];
+    if (ifNoneMatch === etag || (ifModifiedSince && new Date(ifModifiedSince) >= stats.mtime)) {
+      return res.status(304).end();
+    }
+
+    const range = req.headers.range;
+    const streamOptions = { highWaterMark: 1024 * 1024 };
 
     if (!range) {
       res.writeHead(200, {
         "Content-Length": fileSize,
         "Content-Type": contentType,
       });
-      return fs.createReadStream(filePath).pipe(res);
+      return fs.createReadStream(filePath, streamOptions).pipe(res);
     }
 
     const parts = range.replace(/bytes=/, "").split("-");
@@ -228,12 +248,11 @@ app.get("/stream/:filename", (req, res) => {
 
     res.writeHead(206, {
       "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-      "Accept-Ranges": "bytes",
       "Content-Length": chunkSize,
       "Content-Type": contentType,
     });
 
-    fs.createReadStream(filePath, { start, end }).pipe(res);
+    fs.createReadStream(filePath, { ...streamOptions, start, end }).pipe(res);
   });
 });
 
