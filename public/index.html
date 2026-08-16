@@ -20,7 +20,9 @@
     --teal: #2dd4c8;
     --blue: #3b82f6;
     --accent-dim: #23566b;
-    --gradient-glow: linear-gradient(135deg, #8b5cf6, #22d3ee, #3b82f6);
+    --glow-a: #8b5cf6;
+    --glow-b: #22d3ee;
+    --glow-c: #3b82f6;
   }
 
   html[data-theme="sunset"] {
@@ -32,7 +34,9 @@
     --teal: #f472b6;
     --blue: #a855f7;
     --accent-dim: #7a3f66;
-    --gradient-glow: linear-gradient(135deg, #f97316, #f472b6, #a855f7);
+    --glow-a: #f97316;
+    --glow-b: #f472b6;
+    --glow-c: #a855f7;
   }
 
   html[data-theme="grape"] {
@@ -44,7 +48,9 @@
     --teal: #8b5cf6;
     --blue: #d946ef;
     --accent-dim: #4c3170;
-    --gradient-glow: linear-gradient(135deg, #d946ef, #8b5cf6, #6366f1);
+    --glow-a: #d946ef;
+    --glow-b: #8b5cf6;
+    --glow-c: #6366f1;
   }
 
   html[data-theme="ember"] {
@@ -56,7 +62,79 @@
     --teal: #fb923c;
     --blue: #ef4444;
     --accent-dim: #7a3a1c;
-    --gradient-glow: linear-gradient(135deg, #f97316, #ef4444, #eab308);
+    --glow-a: #f97316;
+    --glow-b: #ef4444;
+    --glow-c: #eab308;
+  }
+
+  html[data-theme="forest"] {
+    --bg: #0a130e;
+    --panel: #0f1c14;
+    --rule: #1c3323;
+    --text: #dcf5e6;
+    --text-dim: #7fa88f;
+    --teal: #34d399;
+    --blue: #10b981;
+    --accent-dim: #1e5c40;
+    --glow-a: #a3e635;
+    --glow-b: #34d399;
+    --glow-c: #10b981;
+  }
+
+  html[data-theme="rose"] {
+    --bg: #170a0d;
+    --panel: #220e13;
+    --rule: #3d1a22;
+    --text: #fbe2e6;
+    --text-dim: #b8818c;
+    --teal: #fb7185;
+    --blue: #e11d48;
+    --accent-dim: #7a2836;
+    --glow-a: #fb7185;
+    --glow-b: #e11d48;
+    --glow-c: #f43f5e;
+  }
+
+  html[data-theme="gold"] {
+    --bg: #160f05;
+    --panel: #201607;
+    --rule: #3d2a0d;
+    --text: #fbeecd;
+    --text-dim: #b89e6d;
+    --teal: #fbbf24;
+    --blue: #d97706;
+    --accent-dim: #7a5a17;
+    --glow-a: #fde047;
+    --glow-b: #fbbf24;
+    --glow-c: #d97706;
+  }
+
+  html[data-theme="midnight"] {
+    --bg: #090a16;
+    --panel: #0f1122;
+    --rule: #1e2140;
+    --text: #e2e4fb;
+    --text-dim: #7d81b0;
+    --teal: #6366f1;
+    --blue: #4338ca;
+    --accent-dim: #33327a;
+    --glow-a: #818cf8;
+    --glow-b: #6366f1;
+    --glow-c: #4338ca;
+  }
+
+  html[data-theme="cyber"] {
+    --bg: #0a0612;
+    --panel: #150c22;
+    --rule: #2c1a45;
+    --text: #f0e6fb;
+    --text-dim: #9b7fb8;
+    --teal: #22d3ee;
+    --blue: #e879f9;
+    --accent-dim: #5c2e7a;
+    --glow-a: #e879f9;
+    --glow-b: #22d3ee;
+    --glow-c: #a855f7;
   }
 
   html[data-theme="light"] {
@@ -68,11 +146,28 @@
     --teal: #0891a3;
     --blue: #4f46e5;
     --accent-dim: #b9c4cf;
-    --gradient-glow: linear-gradient(135deg, #8b5cf6, #0891a3, #4f46e5);
+    --glow-a: #8b5cf6;
+    --glow-b: #0891a3;
+    --glow-c: #4f46e5;
+  }
+
+  html[data-theme="sand"] {
+    --bg: #faf6f0;
+    --panel: #ffffff;
+    --rule: #ece1d3;
+    --text: #2b2015;
+    --text-dim: #8a7863;
+    --teal: #d97706;
+    --blue: #c2410c;
+    --accent-dim: #d9c4a8;
+    --glow-a: #f59e0b;
+    --glow-b: #d97706;
+    --glow-c: #c2410c;
   }
 
   :root {
     --gradient: linear-gradient(135deg, var(--teal), var(--blue));
+    --gradient-glow: linear-gradient(135deg, var(--glow-a), var(--glow-b), var(--glow-c));
   }
 
   * { box-sizing: border-box; }
@@ -603,6 +698,108 @@
     color: var(--text-dim);
   }
 
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+
+  .toggle-title {
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .toggle-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .toggle-switch {
+    flex-shrink: 0;
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    border: none;
+    background: var(--rule);
+    position: relative;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .toggle-switch.on {
+    background: var(--gradient);
+  }
+
+  .toggle-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    transition: left 0.15s ease;
+  }
+
+  .toggle-switch.on .toggle-knob {
+    left: 23px;
+  }
+
+  #video-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  #video-wrap video {
+    width: 100%;
+    max-height: 82vh;
+    background: black;
+    border-radius: 3px;
+    display: block;
+  }
+
+  #enhance-canvas {
+    display: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  #enhance-canvas.active {
+    display: block;
+  }
+
+  #enhance-badge {
+    display: none;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--gradient-glow);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  #enhance-badge.active {
+    display: block;
+  }
+
   @media (max-width: 640px) {
     .grid {
       grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
@@ -804,13 +1001,6 @@
     color: var(--teal);
   }
 
-  video {
-    width: 100%;
-    max-height: 82vh;
-    background: black;
-    border-radius: 3px;
-  }
-
   #music-player {
     display: none;
     flex-direction: column;
@@ -935,6 +1125,16 @@
     <h3>Settings</h3>
     <p>Pick a color theme. It's saved on this device.</p>
     <div class="theme-grid" id="theme-grid"></div>
+
+    <div class="field-label">Playback</div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-title">Video enhance</div>
+        <div class="toggle-desc">GPU video enhancments. May look better at the cost of breaking traditional media controls.</div>
+      </div>
+      <button id="enhance-toggle" class="toggle-switch" role="switch" aria-checked="false"><span class="toggle-knob"></span></button>
+    </div>
+
     <div class="modal-actions">
       <button id="settings-close">DONE</button>
     </div>
@@ -944,9 +1144,13 @@
 <div id="player-overlay">
   <div class="player-top">
     <div id="player-title"></div>
-    <button id="close-player">✕ CLOSE</button>
+    <button id="close-player">✕ Close</button>
   </div>
-  <video id="video-el" controls autoplay></video>
+  <div id="video-wrap">
+    <video id="video-el" controls autoplay></video>
+    <canvas id="enhance-canvas"></canvas>
+    <div id="enhance-badge">✨ ENHANCED</div>
+  </div>
 
   <div id="music-player">
     <div id="music-art">

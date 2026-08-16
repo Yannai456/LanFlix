@@ -28,6 +28,10 @@ const settingsBtn = document.getElementById("settings-btn");
 const settingsOverlay = document.getElementById("settings-modal-overlay");
 const settingsCloseBtn = document.getElementById("settings-close");
 const themeGrid = document.getElementById("theme-grid");
+const enhanceToggle = document.getElementById("enhance-toggle");
+const videoWrap = document.getElementById("video-wrap");
+const enhanceCanvas = document.getElementById("enhance-canvas");
+const enhanceBadge = document.getElementById("enhance-badge");
 
 let allVideos = [];
 let activeCategory = null;
@@ -48,7 +52,13 @@ const THEMES = [
   { id: "sunset", name: "Sunset", a: "#f472b6", b: "#a855f7" },
   { id: "grape", name: "Grape", a: "#8b5cf6", b: "#d946ef" },
   { id: "ember", name: "Ember", a: "#fb923c", b: "#ef4444" },
+  { id: "forest", name: "Forest", a: "#34d399", b: "#10b981" },
+  { id: "rose", name: "Rose", a: "#fb7185", b: "#e11d48" },
+  { id: "gold", name: "Gold", a: "#fbbf24", b: "#d97706" },
+  { id: "midnight", name: "Midnight", a: "#6366f1", b: "#4338ca" },
+  { id: "cyber", name: "Cyber", a: "#22d3ee", b: "#e879f9" },
   { id: "light", name: "Light", a: "#0891a3", b: "#4f46e5" },
+  { id: "sand", name: "Sand", a: "#d97706", b: "#c2410c" },
 ];
 
 function getCurrentTheme() {
@@ -87,6 +97,22 @@ settingsCloseBtn.addEventListener("click", () => settingsOverlay.classList.remov
 settingsOverlay.addEventListener("click", (e) => {
   if (e.target === settingsOverlay) settingsOverlay.classList.remove("open");
 });
+
+function getEnhanceSetting() {
+  return localStorage.getItem("homeflix-enhance") === "on";
+}
+
+function setEnhanceSetting(on) {
+  localStorage.setItem("homeflix-enhance", on ? "on" : "off");
+  enhanceToggle.classList.toggle("on", on);
+  enhanceToggle.setAttribute("aria-checked", on ? "true" : "false");
+}
+
+enhanceToggle.addEventListener("click", () => {
+  setEnhanceSetting(!getEnhanceSetting());
+});
+
+setEnhanceSetting(getEnhanceSetting());
 
 async function loadLibrary() {
   try {
@@ -474,6 +500,7 @@ function openPlayer(video) {
     videoEl.removeAttribute("src");
     videoEl.style.display = "none";
     musicPlayer.classList.add("open");
+    stopEnhance();
 
     audioEl.src = "/stream/" + encodeURIComponent(video.filename);
     overlay.classList.add("open");
@@ -489,6 +516,12 @@ function openPlayer(video) {
     overlay.classList.add("open");
     videoEl.play();
     stopVisualizer();
+
+    if (getEnhanceSetting()) {
+      startEnhance();
+    } else {
+      stopEnhance();
+    }
   }
 }
 
@@ -504,11 +537,22 @@ function closePlayer() {
   musicPlayer.classList.remove("open");
   videoEl.style.display = "";
   stopVisualizer();
+  stopEnhance();
 }
 
 closeBtn.addEventListener("click", closePlayer);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && overlay.classList.contains("open")) closePlayer();
+  if (!overlay.classList.contains("open")) return;
+  const typing = document.activeElement && ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+  if (typing) return;
+
+  if (e.key === "Escape") closePlayer();
+
+  if (e.key === " ") {
+    e.preventDefault();
+    const activeMedia = musicPlayer.classList.contains("open") ? audioEl : videoEl;
+    if (activeMedia.paused) activeMedia.play(); else activeMedia.pause();
+  }
 });
 
 let audioCtx = null;
@@ -541,6 +585,11 @@ function startVisualizer() {
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
 
+  const rootStyles = getComputedStyle(document.documentElement);
+  const colorBottom = rootStyles.getPropertyValue("--blue").trim() || "#3b82f6";
+  const colorMid = rootStyles.getPropertyValue("--teal").trim() || "#2dd4c8";
+  const colorTop = rootStyles.getPropertyValue("--glow-a").trim() || "#8b5cf6";
+
   function draw() {
     visualizerFrame = requestAnimationFrame(draw);
     analyser.getByteFrequencyData(dataArray);
@@ -558,9 +607,9 @@ function startVisualizer() {
       const y = cssHeight - barHeight;
 
       const gradient = ctx.createLinearGradient(0, cssHeight, 0, 0);
-      gradient.addColorStop(0, "#3b82f6");
-      gradient.addColorStop(0.55, "#2dd4c8");
-      gradient.addColorStop(1, "#8b5cf6");
+      gradient.addColorStop(0, colorBottom);
+      gradient.addColorStop(0.55, colorMid);
+      gradient.addColorStop(1, colorTop);
 
       ctx.fillStyle = gradient;
       ctx.beginPath();
@@ -582,6 +631,154 @@ function stopVisualizer() {
     visualizerFrame = null;
   }
 }
+
+let glCtx = null;
+let glProgram = null;
+let glTexture = null;
+let glTexelLoc = null;
+let enhanceFrame = null;
+let enhanceRunning = false;
+
+function compileShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+}
+
+function initWebGL() {
+  if (glCtx) return;
+
+  const gl = enhanceCanvas.getContext("webgl") || enhanceCanvas.getContext("experimental-webgl");
+  if (!gl) return;
+  glCtx = gl;
+
+  const vsSource = `
+    attribute vec2 aPosition;
+    attribute vec2 aTexCoord;
+    varying vec2 vTexCoord;
+    void main() {
+      vTexCoord = aTexCoord;
+      gl_Position = vec4(aPosition, 0.0, 1.0);
+    }
+  `;
+
+  const fsSource = `
+    precision mediump float;
+    varying vec2 vTexCoord;
+    uniform sampler2D uSampler;
+    uniform vec2 uTexel;
+    void main() {
+      vec4 center = texture2D(uSampler, vTexCoord);
+      vec4 up = texture2D(uSampler, vTexCoord + vec2(0.0, -uTexel.y));
+      vec4 down = texture2D(uSampler, vTexCoord + vec2(0.0, uTexel.y));
+      vec4 left = texture2D(uSampler, vTexCoord + vec2(-uTexel.x, 0.0));
+      vec4 right = texture2D(uSampler, vTexCoord + vec2(uTexel.x, 0.0));
+      vec4 sharpened = center * 5.0 - up - down - left - right;
+      vec3 color = mix(center.rgb, sharpened.rgb, 0.35);
+      color = (color - 0.5) * 1.06 + 0.5;
+      float gray = dot(color, vec3(0.299, 0.587, 0.114));
+      color = mix(vec3(gray), color, 1.12);
+      gl_FragColor = vec4(clamp(color, 0.0, 1.0), center.a);
+    }
+  `;
+
+  const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource);
+  const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+  if (!vs || !fs) return;
+
+  glProgram = gl.createProgram();
+  gl.attachShader(glProgram, vs);
+  gl.attachShader(glProgram, fs);
+  gl.linkProgram(glProgram);
+  if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(glProgram));
+    glProgram = null;
+    return;
+  }
+  gl.useProgram(glProgram);
+
+  const positions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+  const texCoords = new Float32Array([0, 1, 1, 1, 0, 0, 1, 0]);
+
+  const positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+  const aPosition = gl.getAttribLocation(glProgram, "aPosition");
+  gl.enableVertexAttribArray(aPosition);
+  gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+  const texCoordBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+  const aTexCoord = gl.getAttribLocation(glProgram, "aTexCoord");
+  gl.enableVertexAttribArray(aTexCoord);
+  gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 0, 0);
+
+  glTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, glTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+  glTexelLoc = gl.getUniformLocation(glProgram, "uTexel");
+}
+
+function resizeEnhanceCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = videoWrap.clientWidth;
+  const height = videoWrap.clientHeight;
+  enhanceCanvas.width = Math.max(1, Math.round(width * dpr));
+  enhanceCanvas.height = Math.max(1, Math.round(height * dpr));
+  if (glCtx) glCtx.viewport(0, 0, enhanceCanvas.width, enhanceCanvas.height);
+}
+
+function enhanceLoop() {
+  if (!enhanceRunning) return;
+  enhanceFrame = requestAnimationFrame(enhanceLoop);
+  if (!glCtx || !glProgram || videoEl.readyState < 2) return;
+
+  const gl = glCtx;
+  gl.bindTexture(gl.TEXTURE_2D, glTexture);
+  try {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
+  } catch (e) {
+    return;
+  }
+  gl.uniform2f(glTexelLoc, 1 / enhanceCanvas.width, 1 / enhanceCanvas.height);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function startEnhance() {
+  initWebGL();
+  if (!glCtx || !glProgram) return;
+  enhanceCanvas.classList.add("active");
+  enhanceBadge.classList.add("active");
+  resizeEnhanceCanvas();
+  enhanceRunning = true;
+  enhanceLoop();
+}
+
+function stopEnhance() {
+  enhanceRunning = false;
+  if (enhanceFrame) cancelAnimationFrame(enhanceFrame);
+  enhanceCanvas.classList.remove("active");
+  enhanceBadge.classList.remove("active");
+}
+
+enhanceCanvas.addEventListener("click", () => {
+  if (videoEl.paused) videoEl.play(); else videoEl.pause();
+});
+
+window.addEventListener("resize", () => {
+  if (enhanceRunning) resizeEnhanceCanvas();
+});
 
 let gamepadFocusIndex = 0;
 let gamepadConnected = false;
