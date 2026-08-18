@@ -28,12 +28,10 @@ const settingsBtn = document.getElementById("settings-btn");
 const settingsOverlay = document.getElementById("settings-modal-overlay");
 const settingsCloseBtn = document.getElementById("settings-close");
 const themeGrid = document.getElementById("theme-grid");
-const enhanceToggle = document.getElementById("enhance-toggle");
-const videoWrap = document.getElementById("video-wrap");
-const enhanceCanvas = document.getElementById("enhance-canvas");
-const enhanceBadge = document.getElementById("enhance-badge");
+const backgroundBadge = document.getElementById("background-badge");
 const bufferSpinner = document.getElementById("buffer-spinner");
 const musicSpinner = document.getElementById("music-spinner");
+const backgroundToggle = document.getElementById("background-toggle");
 
 let allVideos = [];
 let activeCategory = null;
@@ -100,21 +98,21 @@ settingsOverlay.addEventListener("click", (e) => {
   if (e.target === settingsOverlay) settingsOverlay.classList.remove("open");
 });
 
-function getEnhanceSetting() {
-  return localStorage.getItem("homeflix-enhance") === "on";
+function getBackgroundPlaySetting() {
+  return localStorage.getItem("homeflix-background-play") === "on";
 }
 
-function setEnhanceSetting(on) {
-  localStorage.setItem("homeflix-enhance", on ? "on" : "off");
-  enhanceToggle.classList.toggle("on", on);
-  enhanceToggle.setAttribute("aria-checked", on ? "true" : "false");
+function setBackgroundPlaySetting(on) {
+  localStorage.setItem("homeflix-background-play", on ? "on" : "off");
+  backgroundToggle.classList.toggle("on", on);
+  backgroundToggle.setAttribute("aria-checked", on ? "true" : "false");
 }
 
-enhanceToggle.addEventListener("click", () => {
-  setEnhanceSetting(!getEnhanceSetting());
+backgroundToggle.addEventListener("click", () => {
+  setBackgroundPlaySetting(!getBackgroundPlaySetting());
 });
 
-setEnhanceSetting(getEnhanceSetting());
+setBackgroundPlaySetting(getBackgroundPlaySetting());
 
 async function loadLibrary() {
   try {
@@ -504,6 +502,34 @@ audioEl.addEventListener("loadstart", () => musicSpinner.classList.add("active")
 audioEl.addEventListener("playing", () => musicSpinner.classList.remove("active"));
 audioEl.addEventListener("canplay", () => musicSpinner.classList.remove("active"));
 
+function updateMediaSession(video) {
+  if (!("mediaSession" in navigator)) return;
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: video.title,
+    artist: "homeflix",
+    album: video.tags[0] || "",
+  });
+
+  navigator.mediaSession.setActionHandler("play", () => {
+    const activeMedia = musicPlayer.classList.contains("open") ? audioEl : videoEl;
+    activeMedia.play();
+  });
+  navigator.mediaSession.setActionHandler("pause", () => {
+    const activeMedia = musicPlayer.classList.contains("open") ? audioEl : videoEl;
+    activeMedia.pause();
+  });
+  navigator.mediaSession.setActionHandler("stop", () => closePlayer());
+}
+
+function clearMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.metadata = null;
+  navigator.mediaSession.setActionHandler("play", null);
+  navigator.mediaSession.setActionHandler("pause", null);
+  navigator.mediaSession.setActionHandler("stop", null);
+}
+
 function openPlayer(video) {
   playerTitle.textContent = video.title;
 
@@ -512,28 +538,31 @@ function openPlayer(video) {
     videoEl.removeAttribute("src");
     videoEl.style.display = "none";
     musicPlayer.classList.add("open");
-    stopEnhance();
 
     audioEl.src = "/stream/" + encodeURIComponent(video.filename);
     overlay.classList.add("open");
     audioEl.play();
-    startVisualizer();
+    updateMediaSession(video);
+
+    if (getBackgroundPlaySetting()) {
+      stopVisualizer();
+      backgroundBadge.classList.add("active");
+    } else {
+      backgroundBadge.classList.remove("active");
+      startVisualizer();
+    }
   } else {
     audioEl.pause();
     audioEl.removeAttribute("src");
     musicPlayer.classList.remove("open");
+    backgroundBadge.classList.remove("active");
     videoEl.style.display = "";
 
     videoEl.src = "/stream/" + encodeURIComponent(video.filename);
     overlay.classList.add("open");
     videoEl.play();
     stopVisualizer();
-
-    if (getEnhanceSetting()) {
-      startEnhance();
-    } else {
-      stopEnhance();
-    }
+    updateMediaSession(video);
   }
 }
 
@@ -547,9 +576,10 @@ function closePlayer() {
 
   overlay.classList.remove("open");
   musicPlayer.classList.remove("open");
+  backgroundBadge.classList.remove("active");
   videoEl.style.display = "";
   stopVisualizer();
-  stopEnhance();
+  clearMediaSession();
   bufferSpinner.classList.remove("active");
   musicSpinner.classList.remove("active");
 }
@@ -645,154 +675,6 @@ function stopVisualizer() {
     visualizerFrame = null;
   }
 }
-
-let glCtx = null;
-let glProgram = null;
-let glTexture = null;
-let glTexelLoc = null;
-let enhanceFrame = null;
-let enhanceRunning = false;
-
-function compileShader(gl, type, source) {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error(gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-}
-
-function initWebGL() {
-  if (glCtx) return;
-
-  const gl = enhanceCanvas.getContext("webgl") || enhanceCanvas.getContext("experimental-webgl");
-  if (!gl) return;
-  glCtx = gl;
-
-  const vsSource = `
-    attribute vec2 aPosition;
-    attribute vec2 aTexCoord;
-    varying vec2 vTexCoord;
-    void main() {
-      vTexCoord = aTexCoord;
-      gl_Position = vec4(aPosition, 0.0, 1.0);
-    }
-  `;
-
-  const fsSource = `
-    precision mediump float;
-    varying vec2 vTexCoord;
-    uniform sampler2D uSampler;
-    uniform vec2 uTexel;
-    void main() {
-      vec4 center = texture2D(uSampler, vTexCoord);
-      vec4 up = texture2D(uSampler, vTexCoord + vec2(0.0, -uTexel.y));
-      vec4 down = texture2D(uSampler, vTexCoord + vec2(0.0, uTexel.y));
-      vec4 left = texture2D(uSampler, vTexCoord + vec2(-uTexel.x, 0.0));
-      vec4 right = texture2D(uSampler, vTexCoord + vec2(uTexel.x, 0.0));
-      vec4 sharpened = center * 5.0 - up - down - left - right;
-      vec3 color = mix(center.rgb, sharpened.rgb, 0.35);
-      color = (color - 0.5) * 1.06 + 0.5;
-      float gray = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(vec3(gray), color, 1.12);
-      gl_FragColor = vec4(clamp(color, 0.0, 1.0), center.a);
-    }
-  `;
-
-  const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
-  if (!vs || !fs) return;
-
-  glProgram = gl.createProgram();
-  gl.attachShader(glProgram, vs);
-  gl.attachShader(glProgram, fs);
-  gl.linkProgram(glProgram);
-  if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
-    console.error(gl.getProgramInfoLog(glProgram));
-    glProgram = null;
-    return;
-  }
-  gl.useProgram(glProgram);
-
-  const positions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
-  const texCoords = new Float32Array([0, 1, 1, 1, 0, 0, 1, 0]);
-
-  const positionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-  const aPosition = gl.getAttribLocation(glProgram, "aPosition");
-  gl.enableVertexAttribArray(aPosition);
-  gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
-
-  const texCoordBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
-  const aTexCoord = gl.getAttribLocation(glProgram, "aTexCoord");
-  gl.enableVertexAttribArray(aTexCoord);
-  gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 0, 0);
-
-  glTexture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, glTexture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-  glTexelLoc = gl.getUniformLocation(glProgram, "uTexel");
-}
-
-function resizeEnhanceCanvas() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const width = videoWrap.clientWidth;
-  const height = videoWrap.clientHeight;
-  enhanceCanvas.width = Math.max(1, Math.round(width * dpr));
-  enhanceCanvas.height = Math.max(1, Math.round(height * dpr));
-  if (glCtx) glCtx.viewport(0, 0, enhanceCanvas.width, enhanceCanvas.height);
-}
-
-function enhanceLoop() {
-  if (!enhanceRunning) return;
-  enhanceFrame = requestAnimationFrame(enhanceLoop);
-  if (!glCtx || !glProgram || videoEl.readyState < 2) return;
-
-  const gl = glCtx;
-  gl.bindTexture(gl.TEXTURE_2D, glTexture);
-  try {
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
-  } catch (e) {
-    return;
-  }
-  gl.uniform2f(glTexelLoc, 1 / enhanceCanvas.width, 1 / enhanceCanvas.height);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-}
-
-function startEnhance() {
-  initWebGL();
-  if (!glCtx || !glProgram) return;
-  enhanceCanvas.classList.add("active");
-  enhanceBadge.classList.add("active");
-  resizeEnhanceCanvas();
-  enhanceRunning = true;
-  enhanceLoop();
-}
-
-function stopEnhance() {
-  enhanceRunning = false;
-  if (enhanceFrame) cancelAnimationFrame(enhanceFrame);
-  enhanceCanvas.classList.remove("active");
-  enhanceBadge.classList.remove("active");
-}
-
-enhanceCanvas.addEventListener("click", () => {
-  if (videoEl.paused) videoEl.play(); else videoEl.pause();
-});
-
-window.addEventListener("resize", () => {
-  if (enhanceRunning) resizeEnhanceCanvas();
-});
 
 let gamepadFocusIndex = 0;
 let gamepadConnected = false;

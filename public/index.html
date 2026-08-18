@@ -766,21 +766,7 @@
     display: block;
   }
 
-  #enhance-canvas {
-    display: none;
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-
-  #enhance-canvas.active {
-    display: block;
-  }
-
-  #enhance-badge {
+  #background-badge {
     display: none;
     position: absolute;
     top: 10px;
@@ -796,7 +782,7 @@
     pointer-events: none;
   }
 
-  #enhance-badge.active {
+  #background-badge.active {
     display: block;
   }
 
@@ -1053,6 +1039,7 @@
     gap: 28px;
     flex: 1;
     padding: 20px 0 10px;
+    position: relative;
   }
 
   #music-player.open {
@@ -1173,10 +1160,10 @@
     <div class="field-label">Playback</div>
     <div class="toggle-row">
       <div>
-        <div class="toggle-title">Video enhance</div>
-        <div class="toggle-desc">GPU sharpening filter while playing — no extra detail is invented. Off by default.</div>
+        <div class="toggle-title">Background play (music)</div>
+        <div class="toggle-desc">Keep music playing when your phone screen locks or you switch apps. Turning this on disables the animated bar visualizer for music.</div>
       </div>
-      <button id="enhance-toggle" class="toggle-switch" role="switch" aria-checked="false"><span class="toggle-knob"></span></button>
+      <button id="background-toggle" class="toggle-switch" role="switch" aria-checked="false"><span class="toggle-knob"></span></button>
     </div>
 
     <div class="modal-actions">
@@ -1192,8 +1179,6 @@
   </div>
   <div id="video-wrap">
     <video id="video-el" controls autoplay></video>
-    <canvas id="enhance-canvas"></canvas>
-    <div id="enhance-badge">✨ ENHANCED</div>
     <div id="buffer-spinner"><div class="spinner-ring"></div></div>
   </div>
 
@@ -1202,6 +1187,7 @@
       <div id="music-note">♪</div>
       <div id="music-spinner"><div class="spinner-ring"></div></div>
     </div>
+    <div id="background-badge">BACKGROUND PLAY — VISUALIZER OFF</div>
     <canvas id="visualizer"></canvas>
     <audio id="audio-el" controls autoplay></audio>
   </div>
