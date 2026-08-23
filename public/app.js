@@ -24,6 +24,13 @@ const audioEl = document.getElementById("audio-el");
 const visualizerCanvas = document.getElementById("visualizer");
 const nameInput = document.getElementById("name-input");
 const nameExt = document.getElementById("name-ext");
+const thumbPreviewImg = document.getElementById("thumb-preview-img");
+const thumbPreviewEmpty = document.getElementById("thumb-preview-empty");
+const thumbFileInput = document.getElementById("thumb-file-input");
+const thumbUploadBtn = document.getElementById("thumb-upload-btn");
+const thumbRemoveBtn = document.getElementById("thumb-remove-btn");
+const thumbSearchBtn = document.getElementById("thumb-search-btn");
+const thumbSearchResults = document.getElementById("thumb-search-results");
 const settingsBtn = document.getElementById("settings-btn");
 const settingsOverlay = document.getElementById("settings-modal-overlay");
 const settingsCloseBtn = document.getElementById("settings-close");
@@ -39,6 +46,15 @@ let searchTerm = "";
 let editingFilename = null;
 let editingExt = "";
 let assignMode = null;
+let posterSearchEnabled = false;
+
+fetch("/api/config")
+  .then((res) => res.json())
+  .then((cfg) => {
+    posterSearchEnabled = Boolean(cfg.posterSearchEnabled);
+    thumbSearchBtn.style.display = posterSearchEnabled ? "" : "none";
+  })
+  .catch(() => {});
 
 function formatSize(bytes) {
   const gb = bytes / (1024 ** 3);
@@ -258,12 +274,15 @@ function renderGrid() {
 
     const badgeTag = v.tags[0];
     const extraTagsHtml = v.tags.slice(1).map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join("");
+    const thumbStyle = v.hasThumbnail
+      ? ` style="background-image: url('/thumbnail/${encodeURIComponent(v.filename)}')"`
+      : "";
 
     card.innerHTML = `
       <button class="delete-btn" title="Delete video">✕</button>
       <div class="assign-check">✓</div>
-      <div class="card-thumb">
-        <span class="play-icon">${v.kind === "audio" ? "♪" : "▶"}</span>
+      <div class="card-thumb"${thumbStyle}>
+        ${v.hasThumbnail ? "" : `<span class="play-icon">${v.kind === "audio" ? "♪" : "▶"}</span>`}
         <div class="card-thumb-overlay">
           ${badgeTag ? `<span class="card-badge">${escapeHtml(badgeTag)}</span>` : ""}
           <div class="card-thumb-title">${escapeHtml(v.title)}</div>
@@ -319,6 +338,20 @@ searchInput.addEventListener("input", () => {
   renderGrid();
 });
 
+function refreshThumbPreview(video) {
+  if (video.hasThumbnail) {
+    thumbPreviewImg.src = `/thumbnail/${encodeURIComponent(video.filename)}?t=${Date.now()}`;
+    thumbPreviewImg.classList.add("visible");
+    thumbPreviewEmpty.classList.add("hidden");
+    thumbRemoveBtn.style.display = "";
+  } else {
+    thumbPreviewImg.classList.remove("visible");
+    thumbPreviewImg.removeAttribute("src");
+    thumbPreviewEmpty.classList.remove("hidden");
+    thumbRemoveBtn.style.display = "none";
+  }
+}
+
 function openTagEditor(video) {
   editingFilename = video.filename;
   const dot = video.filename.lastIndexOf(".");
@@ -329,6 +362,8 @@ function openTagEditor(video) {
   nameInput.value = base;
   nameExt.textContent = editingExt;
   tagInput.value = video.tags.join(", ");
+  thumbSearchResults.innerHTML = "";
+  refreshThumbPreview(video);
   tagModalOverlay.classList.add("open");
   nameInput.focus();
   nameInput.select();
@@ -338,6 +373,7 @@ function closeTagEditor() {
   tagModalOverlay.classList.remove("open");
   editingFilename = null;
   editingExt = "";
+  thumbSearchResults.innerHTML = "";
 }
 
 async function saveTagEditor() {
@@ -397,6 +433,91 @@ nameInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") saveTagEditor();
   if (e.key === "Escape") closeTagEditor();
 });
+
+thumbUploadBtn.addEventListener("click", () => thumbFileInput.click());
+
+thumbFileInput.addEventListener("change", async () => {
+  const file = thumbFileInput.files[0];
+  thumbFileInput.value = "";
+  if (!file || !editingFilename) return;
+
+  const formData = new FormData();
+  formData.append("thumbnail", file);
+
+  try {
+    const res = await fetch(`/api/videos/${encodeURIComponent(editingFilename)}/thumbnail`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Server error " + res.status);
+    refreshThumbPreview({ filename: editingFilename, hasThumbnail: true });
+    loadLibrary();
+  } catch (err) {
+    alert("Couldn't upload thumbnail: " + err.message);
+  }
+});
+
+thumbRemoveBtn.addEventListener("click", async () => {
+  if (!editingFilename) return;
+  try {
+    const res = await fetch(`/api/videos/${encodeURIComponent(editingFilename)}/thumbnail`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Server error " + res.status);
+    refreshThumbPreview({ filename: editingFilename, hasThumbnail: false });
+    loadLibrary();
+  } catch (err) {
+    alert("Couldn't remove thumbnail: " + err.message);
+  }
+});
+
+thumbSearchBtn.addEventListener("click", async () => {
+  if (!editingFilename || !posterSearchEnabled) return;
+  const query = nameInput.value.trim() || tagModalTitle.textContent;
+
+  thumbSearchResults.innerHTML = `<span style="font-size:12px;color:var(--text-dim)">Searching…</span>`;
+
+  try {
+    const res = await fetch(`/api/videos/${encodeURIComponent(editingFilename)}/poster-search?title=${encodeURIComponent(query)}`);
+    const results = await res.json();
+    if (!res.ok) throw new Error(results.error || "Search failed");
+
+    if (results.length === 0) {
+      thumbSearchResults.innerHTML = `<span style="font-size:12px;color:var(--text-dim)">No posters found</span>`;
+      return;
+    }
+
+    thumbSearchResults.innerHTML = "";
+    results.forEach((r) => {
+      const img = document.createElement("img");
+      img.src = r.posterUrl;
+      img.title = r.year ? `${r.title} (${r.year})` : r.title;
+      img.addEventListener("click", () => choosePoster(r.posterUrl));
+      thumbSearchResults.appendChild(img);
+    });
+  } catch (err) {
+    thumbSearchResults.innerHTML = `<span style="font-size:12px;color:var(--text-dim)">${escapeHtml(err.message)}</span>`;
+  }
+});
+
+async function choosePoster(url) {
+  if (!editingFilename) return;
+  try {
+    const res = await fetch(`/api/videos/${encodeURIComponent(editingFilename)}/thumbnail-from-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Server error " + res.status);
+    thumbSearchResults.innerHTML = "";
+    refreshThumbPreview({ filename: editingFilename, hasThumbnail: true });
+    loadLibrary();
+  } catch (err) {
+    alert("Couldn't save that poster: " + err.message);
+  }
+}
 
 uploadBtn.addEventListener("click", () => fileInput.click());
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lanflix</title>
+<title>homeflix</title>
 <script>
   (function () {
     var saved = localStorage.getItem("homeflix-theme");
@@ -452,6 +452,8 @@
       radial-gradient(circle at 30% 20%, rgba(139,92,246,0.25), transparent 55%),
       radial-gradient(circle at 75% 75%, rgba(34,211,238,0.2), transparent 55%),
       linear-gradient(160deg, #16202b, #0a1116 70%);
+    background-size: cover;
+    background-position: center;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -948,6 +950,93 @@
     white-space: nowrap;
   }
 
+  .thumb-edit-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .thumb-preview-box {
+    width: 70px;
+    height: 100px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .thumb-preview-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+
+  .thumb-preview-box img.visible {
+    display: block;
+  }
+
+  #thumb-preview-empty {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 4px;
+  }
+
+  #thumb-preview-empty.hidden {
+    display: none;
+  }
+
+  .thumb-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: center;
+    flex: 1;
+  }
+
+  .thumb-actions button {
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 3px;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .thumb-actions button:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  #thumb-search-results {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin: 0 0 16px;
+    padding-bottom: 4px;
+  }
+
+  #thumb-search-results img {
+    width: 60px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    flex-shrink: 0;
+  }
+
+  #thumb-search-results img:hover {
+    border-color: var(--teal);
+  }
+
   #tag-input {
     width: 100%;
     background: var(--bg);
@@ -1105,13 +1194,13 @@
 
 <header>
   <div class="brand-block">
-    <div class="brand">Lanflix</div>
-    <div class="tagline">Local Network Streaming</div>
+    <div class="brand">homeflix</div>
+    <div class="tagline">your movies, your network</div>
   </div>
   <div class="header-controls">
     <input type="text" id="search-input" placeholder="Search…">
     <input type="file" id="file-input" accept="video/mp4,.mp4,.webm,.mkv,.mov,.m4v,.mp3,.wav,.flac,.m4a,.ogg,.aac" multiple hidden>
-    <button id="upload-btn">+ Add Video</button>
+    <button id="upload-btn">+ ADD VIDEO</button>
     <button id="settings-btn" title="Settings">⚙</button>
   </div>
 </header>
@@ -1134,13 +1223,28 @@
 <div id="tag-modal-overlay">
   <div id="tag-modal">
     <h3 id="tag-modal-title"></h3>
-    <p>Rename the file and/or edit which categories it belongs to.</p>
+    <p>Rename the file, set a thumbnail, and edit which categories it belongs to.</p>
 
     <div class="field-label">File name</div>
     <div class="name-edit-row">
       <input type="text" id="name-input">
       <span id="name-ext"></span>
     </div>
+
+    <div class="field-label">Thumbnail</div>
+    <div class="thumb-edit-row">
+      <div class="thumb-preview-box">
+        <img id="thumb-preview-img" alt="">
+        <span id="thumb-preview-empty">No thumbnail</span>
+      </div>
+      <div class="thumb-actions">
+        <input type="file" id="thumb-file-input" accept="image/*" hidden>
+        <button type="button" id="thumb-upload-btn">Upload image</button>
+        <button type="button" id="thumb-remove-btn">Remove thumbnail</button>
+        <button type="button" id="thumb-search-btn" style="display:none">🔍 Search online for a poster</button>
+      </div>
+    </div>
+    <div id="thumb-search-results"></div>
 
     <div class="field-label">Categories</div>
     <input type="text" id="tag-input" placeholder="e.g. comedy, 90s, favorites">
@@ -1161,7 +1265,7 @@
     <div class="toggle-row">
       <div>
         <div class="toggle-title">Background play (music)</div>
-        <div class="toggle-desc">Keep music playing when your phone screen locks or you switch apps. Turning this on disables the animated bar visualizer for music.</div>
+        <div class="toggle-desc">Keep music playing when your phone screen locks or you switch apps. Turning this on disables the animated bar visualizer for music — the two don't work together on most mobile browsers, since the bars require rerouting audio through a connection that phones tend to cut when the screen locks. Off by default. If you've already played a song with the bars showing earlier in this browser session, reload the page after turning this on so it takes full effect.</div>
       </div>
       <button id="background-toggle" class="toggle-switch" role="switch" aria-checked="false"><span class="toggle-knob"></span></button>
     </div>
@@ -1187,7 +1291,7 @@
       <div id="music-note">♪</div>
       <div id="music-spinner"><div class="spinner-ring"></div></div>
     </div>
-    <div id="background-badge">BACKGROUND PLAY — VISUALIZER OFF</div>
+    <div id="background-badge">🔒 BACKGROUND PLAY — VISUALIZER OFF</div>
     <canvas id="visualizer"></canvas>
     <audio id="audio-el" controls autoplay></audio>
   </div>
