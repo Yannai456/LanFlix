@@ -25,7 +25,7 @@ LAN.
 
 6. From any device on your home network, open a browser and go to:
    ```
-   http://192.168.1.50:8000
+   http:<Your server Lan IP>:<Your server's Port>
    ```
 
 ## Music player with animated bars

@@ -26,6 +26,20 @@ app.use(express.json());
 fs.mkdirSync(VIDEO_DIR, { recursive: true });
 fs.mkdirSync(THUMBS_DIR, { recursive: true });
 
+function getLanIP() {
+    const interfaces = os.networkInterfaces();
+
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+
+    return 'localhost';
+}
+
 function loadTags() {
   try {
     return JSON.parse(fs.readFileSync(TAGS_FILE, "utf8"));
@@ -816,7 +830,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`\nLan flix running`);
   console.log(`  Serving folder: ${VIDEO_DIR}`);
   console.log(`  Local:   http://localhost:${PORT}`);
-  console.log(`  Network: http://<this-machine's-LAN-IP>:${PORT}\n`);
+  console.log(`  Network: http://${getLanIP()}:${PORT}\n`);
 
   generateDesktopAppDownloads()
     .then(() => console.log("Desktop app downloads ready in /downloads"))
