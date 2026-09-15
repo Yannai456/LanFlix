@@ -1,13 +1,14 @@
 {
-  "name": "homeflix",
+  "name": "lanflix",
   "version": "1.0.0",
-  "description": "A tiny self-hosted video streaming server for your home network",
+  "description": "Lan flix — a tiny self-hosted video streaming server for your home network",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "archiver": "^7.0.1"
   }
 }

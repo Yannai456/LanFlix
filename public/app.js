@@ -7,6 +7,19 @@ const ICONS = {
   lock: `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
 };
 
+async function safeJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      res.ok
+        ? "Server sent back something unexpected"
+        : `Server error ${res.status} — make sure server.js is up to date and restarted`
+    );
+  }
+}
+
 const grid = document.getElementById("grid");
 const status = document.getElementById("status");
 const overlay = document.getElementById("player-overlay");
@@ -136,7 +149,7 @@ settingsOverlay.addEventListener("click", (e) => {
 async function refreshTmdbStatus() {
   try {
     const res = await fetch("/api/config");
-    const cfg = await res.json();
+    const cfg = await safeJson(res);
     posterSearchEnabled = Boolean(cfg.posterSearchEnabled);
     thumbSearchBtn.style.display = posterSearchEnabled ? "" : "none";
     tmdbKeyInput.value = "";
@@ -156,7 +169,7 @@ tmdbSaveBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tmdbApiKey: value }),
     });
-    const cfg = await res.json();
+    const cfg = await safeJson(res);
     if (!res.ok) throw new Error(cfg.error || "Server error");
     await refreshTmdbStatus();
   } catch (err) {
@@ -209,7 +222,7 @@ function withTokens(url) {
 async function loadPrivateFolderList() {
   try {
     const res = await fetch("/api/private-folders");
-    const names = await res.json();
+    const names = await safeJson(res);
     privateFolderNames = new Set(names);
   } catch {
     privateFolderNames = new Set();
@@ -220,7 +233,7 @@ async function loadLibrary() {
   try {
     const res = await fetch(withTokens("/api/videos"));
     if (!res.ok) throw new Error("Server error " + res.status);
-    allVideos = await res.json();
+    allVideos = await safeJson(res);
     renderCategories();
     renderGrid();
   } catch (err) {
@@ -319,7 +332,7 @@ async function submitUnlock() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ passcode }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || "Incorrect passcode");
 
     setUnlockToken(pendingUnlockCategory, data.token);
@@ -382,7 +395,7 @@ function openPrivacyModal(category) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ passcode: p1 }),
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) throw new Error(data.error || "Server error");
 
         privateFolderNames.add(category);
@@ -392,7 +405,7 @@ function openPrivacyModal(category) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ passcode: p1 }),
         });
-        const unlockData = await unlockRes.json();
+        const unlockData = await safeJson(unlockRes);
         if (unlockRes.ok) setUnlockToken(category, unlockData.token);
 
         closePrivacyModal();
@@ -435,7 +448,7 @@ function openPrivacyModal(category) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ currentPasscode, newPasscode }),
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) throw new Error(data.error || "Server error");
         errorEl.style.color = "var(--teal)";
         errorEl.textContent = "Passcode changed.";
@@ -455,7 +468,7 @@ function openPrivacyModal(category) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ passcode }),
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) throw new Error(data.error || "Server error");
 
         privateFolderNames.delete(category);
@@ -682,7 +695,7 @@ async function saveTagEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newName: newBase }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || "Server error " + res.status);
       currentFilename = data.newFilename;
     } catch (err) {
@@ -737,7 +750,7 @@ thumbFileInput.addEventListener("change", async () => {
       method: "POST",
       body: formData,
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || "Server error " + res.status);
     refreshThumbPreview({ filename: editingFilename, hasThumbnail: true });
     loadLibrary();
@@ -768,7 +781,7 @@ thumbSearchBtn.addEventListener("click", async () => {
 
   try {
     const res = await fetch(`/api/videos/${encodeURIComponent(editingFilename)}/poster-search?title=${encodeURIComponent(query)}`);
-    const results = await res.json();
+    const results = await safeJson(res);
     if (!res.ok) throw new Error(results.error || "Search failed");
 
     if (results.length === 0) {
@@ -797,7 +810,7 @@ async function choosePoster(url) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || "Server error " + res.status);
     thumbSearchResults.innerHTML = "";
     refreshThumbPreview({ filename: editingFilename, hasThumbnail: true });
@@ -916,7 +929,7 @@ function updateMediaSession(video) {
 
   navigator.mediaSession.metadata = new MediaMetadata({
     title: video.title,
-    artist: "homeflix",
+    artist: "Lan flix",
     album: video.tags[0] || "",
   });
 

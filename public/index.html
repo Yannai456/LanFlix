@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lanflix</title>
+<title>Lan flix</title>
 <script>
   (function () {
     var saved = localStorage.getItem("homeflix-theme");
@@ -1168,8 +1168,7 @@
 
   .field-label {
     font-size: 11px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    letter-spacing: 0.3px;
     color: var(--text-dim);
     margin-bottom: 6px;
   }
@@ -1447,13 +1446,13 @@
 
 <header>
   <div class="brand-block">
-    <div class="brand">Lanflix</div>
-    <div class="tagline">Local Network Streaming</div>
+    <div class="brand">Lan flix</div>
+    <div class="tagline">your movies, your network</div>
   </div>
   <div class="header-controls">
     <input type="text" id="search-input" placeholder="Search…">
     <input type="file" id="file-input" accept="video/mp4,.mp4,.webm,.mkv,.mov,.m4v,.mp3,.wav,.flac,.m4a,.ogg,.aac" multiple hidden>
-    <button id="upload-btn">+ Add Video</button>
+    <button id="upload-btn">+ Add video</button>
     <button id="settings-btn" title="Settings">⚙</button>
   </div>
 </header>
@@ -1534,20 +1533,20 @@
     </div>
 
     <div class="field-label">Desktop app</div>
-    <p style="margin-top:-8px">Download a launcher that opens homeflix in its own window, no browser bar — pick your OS:</p>
+    <p style="margin-top:-8px">Download a launcher that opens Lan flix in its own window, no browser bar — pick your OS:</p>
     <div class="download-row">
-      <a href="/api/download/linux" download class="download-btn" tabindex="0">Linux</a>
-      <a href="/api/download/windows" download class="download-btn" tabindex="0">Windows</a>
-      <a href="/api/download/mac" download class="download-btn" tabindex="0">macOS</a>
+      <a href="/downloads/linux.zip" download class="download-btn" tabindex="0">Linux</a>
+      <a href="/downloads/windows.zip" download class="download-btn" tabindex="0">Windows</a>
+      <a href="/downloads/mac.zip" download class="download-btn" tabindex="0">macOS</a>
     </div>
-    <p class="download-note">These are small launcher scripts (not installers) that open homeflix using a browser already on your device. Linux: move the downloaded file into <code>~/.local/share/applications/</code> to get it in your app menu. Windows: double-click the <code>.bat</code> file, or right-click → Create shortcut and pin that. macOS: double-click the <code>.command</code> file (you may need to allow it once in System Settings → Privacy &amp; Security).</p>
+    <p class="download-note">Each is a small zip containing a launcher script (not an installer) plus a README with setup steps. Linux: unzip, move <code>lanflix.desktop</code> into <code>~/.local/share/applications/</code>. Windows: unzip, double-click <code>lanflix.bat</code> (or make a shortcut to it). macOS: unzip, double-click <code>lanflix.command</code> (allow it once in System Settings → Privacy &amp; Security if blocked). These point at this server's current LAN address — if that address ever changes, restart the server once to regenerate them.</p>
 
     <div class="field-label">Controller</div>
     <p style="margin-top:-8px">D-pad / left stick always navigates. Remap the action buttons below — click Remap, then press the button you want on your controller.</p>
     <div id="controller-map-list"></div>
 
     <div class="modal-actions">
-      <button id="settings-close">DONE</button>
+      <button id="settings-close">Done</button>
     </div>
   </div>
 </div>
@@ -1558,8 +1557,8 @@
     <p id="unlock-modal-desc">This folder is private.</p>
     <input type="password" id="unlock-passcode-input" placeholder="Passcode" inputmode="numeric">
     <div class="modal-actions" style="margin-top:14px">
-      <button id="unlock-cancel">CANCEL</button>
-      <button id="unlock-submit">UNLOCK</button>
+      <button id="unlock-cancel">Cancel</button>
+      <button id="unlock-submit">Unlock</button>
     </div>
   </div>
 </div>
@@ -1577,7 +1576,7 @@
 <div id="player-overlay">
   <div class="player-top">
     <div id="player-title"></div>
-    <button id="close-player">✕ Close</button>
+    <button id="close-player">✕ CLOSE</button>
   </div>
   <div id="video-wrap">
     <video id="video-el" controls autoplay></video>
@@ -1589,13 +1588,13 @@
       <div id="music-note">♪</div>
       <div id="music-spinner"><div class="spinner-ring"></div></div>
     </div>
-    <div id="background-badge">🔒 Background Play</div>
+    <div id="background-badge">🔒 BACKGROUND PLAY — VISUALIZER OFF</div>
     <canvas id="visualizer"></canvas>
     <audio id="audio-el" controls autoplay></audio>
   </div>
 </div>
 
-<div id="gamepad-indicator">🎮 CONTROLLER CONNECTED — D-PAD TO NAVIGATE, A TO SELECT, B TO GO BACK</div>
+<div id="gamepad-indicator">🎮 Controller connected — D-pad to navigate, A to select, B to go back</div>
 
 <script src="app.js"></script>
 </body>

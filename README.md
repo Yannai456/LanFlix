@@ -1,4 +1,4 @@
-# Lanflix
+# Lan flix
 
 A tiny self-hosted video streaming site for your home network. Point it at a
 folder of videos, run it on your server, and open it from any browser on your
@@ -8,7 +8,7 @@ LAN.
 
 1. Install [Node.js](https://nodejs.org) on your server if it isn't already there.
 2. Copy this folder to your server.
-3. Install the one dependency:
+3. Install dependencies:
    ```
    npm install
    ```
@@ -65,8 +65,8 @@ server instead; a key entered in Settings takes priority if both are set.)
 Without a key configured either way, the "search online" button simply
 doesn't appear — manual upload still works exactly the same regardless.
 
-Thumbnails are stored in a `.homeflix-thumbnails` folder inside your video
-directory, alongside the existing `.homeflix-tags.json` file, so they
+Thumbnails are stored in a `.Lan flix-thumbnails` folder inside your video
+directory, alongside the existing `.Lan flix-tags.json` file, so they
 travel with your library if you move it.
 
 ## Renaming a video
@@ -96,7 +96,7 @@ browsers will cut audio when you lock the screen or switch apps if the page
 has rerouted the sound through a Web Audio API connection — which is
 exactly what the bar visualizer does to analyze the music in real time.
 Turning Background play on skips that rerouting entirely for music, so
-`homeflix` behaves like any other audio app: it keeps playing when your
+`Lan flix` behaves like any other audio app: it keeps playing when your
 screen locks or you switch apps, with lock-screen play/pause controls
 (via the Media Session API, on browsers that support it). The tradeoff is
 the animated bars won't show while this is on — a small badge tells you
@@ -157,7 +157,7 @@ Type in the search bar to filter by title. Click a category chip to filter
 the grid to just that category — click it again (or click "All") to clear
 it. A video can belong to **multiple categories at once**: click "🏷 edit" on
 any card and type comma-separated categories (e.g. `comedy, 90s, favorites`).
-Categories are stored in a small `.homeflix-tags.json` file that lives
+Categories are stored in a small `.Lan flix-tags.json` file that lives
 inside your `VIDEO_DIR`, so they stay with the folder if you move it.
 
 ## Controller navigation (Steam Deck, Xbox/PlayStation controllers, etc.)
@@ -191,14 +191,20 @@ The mapping is saved per-device.
 ## Desktop app
 
 Settings → Desktop app has three download buttons: Linux, Windows, macOS.
-These generate a small launcher (a `.desktop` file, a `.bat` file, or a
-`.command` file respectively) that opens homeflix in its own window using
-a browser already on that device, with no address bar or tabs — it looks
-and feels like a standalone app. These aren't installers or compiled
-binaries; they're lightweight wrapper scripts, which means there's nothing
-to keep updated when the app itself changes, and no separate download for
-every OS/architecture. See the note inside Settings for exactly where to
-put each file so it shows up as a proper app icon on that platform.
+Each downloads a zip (`linux.zip`, `windows.zip`, `mac.zip`) from a
+`/downloads` folder the server serves statically. Inside each zip is a
+small launcher script — a `.desktop` file, a `.bat` file, or a `.command`
+file — plus a README with setup steps, that opens Lan flix in its own
+window using a browser already on that device, with no address bar or
+tabs. These aren't installers or compiled binaries; they're lightweight
+wrapper scripts, which means there's nothing to keep updated when the app
+itself changes.
+
+The server generates these zip files itself into a `downloads/` folder
+(next to `server.js`) every time it starts, auto-detecting its own LAN IP
+address and baking that into the launcher scripts. If your server's IP
+ever changes (e.g. a new DHCP lease), just restart the server once and the
+downloads regenerate with the new address.
 
 ## Private folders
 
@@ -217,7 +223,7 @@ Clicking a locked category's chip prompts for the passcode. Once unlocked,
 it stays unlocked for that browser tab's session (stored in
 `sessionStorage`) — closing the tab re-locks it, so it doesn't silently
 stay open. Passcodes are stored as salted hashes (`scrypt`), never in plain
-text, in `.homeflix-private.json` inside your video folder.
+text, in `.Lan flix-private.json` inside your video folder.
 
 Worth being honest about the security model: this is meant to keep casual
 household members from stumbling into something, not to withstand a
@@ -251,7 +257,7 @@ Right now the server stops if you close the terminal. To keep it running in
 the background, use a process manager like `pm2`:
 ```
 npm install -g pm2
-pm2 start server.js --name homeflix -- --VIDEO_DIR="/path/to/your/movies"
+pm2 start server.js --name Lan flix -- --VIDEO_DIR="/path/to/your/movies"
 pm2 save
 pm2 startup   # follow the printed instructions to auto-start on boot
 ```
