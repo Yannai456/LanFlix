@@ -1,4 +1,4 @@
-# LanFlix
+# Lanflix
 
 A tiny self-hosted video streaming site for your home network. Point it at a
 folder of videos, run it on your server, and open it from any browser on your
@@ -58,12 +58,12 @@ Click "🏷 edit" on any card to open the thumbnail editor. You can:
 
 To enable poster search, get a free API key from
 [themoviedb.org](https://www.themoviedb.org/settings/api) (requires a free
-account) and start the server with it set:
-```
-TMDB_API_KEY="your-key-here" VIDEO_DIR="/path/to/your/movies" node server.js
-```
-Without that variable set, the "search online" button simply doesn't
-appear — manual upload still works exactly the same either way.
+account), then paste it into Settings → Poster search. No restart needed —
+it's saved on the server and takes effect immediately. (If you prefer, you
+can still set a `TMDB_API_KEY` environment variable when starting the
+server instead; a key entered in Settings takes priority if both are set.)
+Without a key configured either way, the "search online" button simply
+doesn't appear — manual upload still works exactly the same regardless.
 
 Thumbnails are stored in a `.homeflix-thumbnails` folder inside your video
 directory, alongside the existing `.homeflix-tags.json` file, so they
@@ -164,14 +164,67 @@ inside your `VIDEO_DIR`, so they stay with the folder if you move it.
 
 Any standard browser-recognized gamepad works — on Steam Deck this works in
 both Gaming Mode's built-in browser and Desktop Mode (Chrome/Firefox). Once
-a controller is detected, an indicator appears in the corner:
+a controller is detected, an indicator appears in the corner. Controller
+navigation now covers the whole app, not just the grid:
 
-- **D-pad / left stick** — move around the video grid
-- **A** — open the highlighted video
-- **B** — close the player (or cancel the tag editor)
-- **Left/right bumper** — cycle through category filters
-- While a video is playing: **A** play/pause, **left/right** seek ±10s,
-  **up/down** volume
+- **D-pad / left stick** — move around the video grid, or step through
+  fields inside any open menu (Settings, the edit modal, unlock/privacy
+  prompts)
+- **Confirm** (A by default) — open the highlighted video, or activate
+  whatever's focused in a menu
+- **Back** (B by default) — close the player, close whichever menu is open,
+  or cancel assign mode
+- **Previous/Next category** (LB/RB by default) — cycle category filters
+- **Open Settings** (Start by default) — jump straight into Settings from
+  the grid
+- **Jump to search** (Y by default) — focus the search bar
+- While a video is playing: confirm play/pause, left/right seek ±10s,
+  up/down volume
+
+All of these buttons are remappable: Settings → Controller, click **Remap**
+next to any action, then press whatever button you want on your controller.
+D-pad/stick direction itself is fixed (it's the natural navigation axis),
+but everything else — confirm, back, category cycling, opening Settings,
+jumping to search — can be reassigned to match your controller's layout.
+The mapping is saved per-device.
+
+## Desktop app
+
+Settings → Desktop app has three download buttons: Linux, Windows, macOS.
+These generate a small launcher (a `.desktop` file, a `.bat` file, or a
+`.command` file respectively) that opens homeflix in its own window using
+a browser already on that device, with no address bar or tabs — it looks
+and feels like a standalone app. These aren't installers or compiled
+binaries; they're lightweight wrapper scripts, which means there's nothing
+to keep updated when the app itself changes, and no separate download for
+every OS/architecture. See the note inside Settings for exactly where to
+put each file so it shows up as a proper app icon on that platform.
+
+## Private folders
+
+Any category can be turned into a passcode-protected private folder. Click
+the small lock icon next to a category chip:
+
+- **Not private yet** → set a passcode (4+ characters) to make it private.
+  Every video in that category is immediately hidden from the grid, the
+  category list, and even direct links — the server itself won't serve
+  those files without a valid unlock, this isn't just hiding things in the
+  browser.
+- **Already private** → the same lock icon lets you change the passcode or
+  remove protection entirely, both of which require the current passcode.
+
+Clicking a locked category's chip prompts for the passcode. Once unlocked,
+it stays unlocked for that browser tab's session (stored in
+`sessionStorage`) — closing the tab re-locks it, so it doesn't silently
+stay open. Passcodes are stored as salted hashes (`scrypt`), never in plain
+text, in `.homeflix-private.json` inside your video folder.
+
+Worth being honest about the security model: this is meant to keep casual
+household members from stumbling into something, not to withstand a
+determined attacker with access to your server's filesystem or a
+network-traffic capture on an unencrypted `http://` LAN connection. For
+genuinely sensitive material, that's a different threat model than this
+feature is built for.
 
 ## Adding videos through the browser
 

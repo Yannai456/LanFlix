@@ -1,3 +1,12 @@
+const ICONS = {
+  close: `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
+  edit: `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>`,
+  musicNote: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+};
+
 const grid = document.getElementById("grid");
 const status = document.getElementById("status");
 const overlay = document.getElementById("player-overlay");
@@ -39,6 +48,21 @@ const backgroundBadge = document.getElementById("background-badge");
 const bufferSpinner = document.getElementById("buffer-spinner");
 const musicSpinner = document.getElementById("music-spinner");
 const backgroundToggle = document.getElementById("background-toggle");
+const tmdbKeyInput = document.getElementById("tmdb-key-input");
+const tmdbSaveBtn = document.getElementById("tmdb-save-btn");
+const tmdbStatus = document.getElementById("tmdb-status");
+const controllerMapList = document.getElementById("controller-map-list");
+const unlockOverlay = document.getElementById("unlock-modal-overlay");
+const unlockModal = document.getElementById("unlock-modal");
+const unlockModalTitle = document.getElementById("unlock-modal-title");
+const unlockModalDesc = document.getElementById("unlock-modal-desc");
+const unlockPasscodeInput = document.getElementById("unlock-passcode-input");
+const unlockCancelBtn = document.getElementById("unlock-cancel");
+const unlockSubmitBtn = document.getElementById("unlock-submit");
+const privacyOverlay = document.getElementById("privacy-modal-overlay");
+const privacyModalTitle = document.getElementById("privacy-modal-title");
+const privacyModalBody = document.getElementById("privacy-modal-body");
+const privacyCancelBtn = document.getElementById("privacy-cancel");
 
 let allVideos = [];
 let activeCategory = null;
@@ -47,14 +71,6 @@ let editingFilename = null;
 let editingExt = "";
 let assignMode = null;
 let posterSearchEnabled = false;
-
-fetch("/api/config")
-  .then((res) => res.json())
-  .then((cfg) => {
-    posterSearchEnabled = Boolean(cfg.posterSearchEnabled);
-    thumbSearchBtn.style.display = posterSearchEnabled ? "" : "none";
-  })
-  .catch(() => {});
 
 function formatSize(bytes) {
   const gb = bytes / (1024 ** 3);
@@ -94,6 +110,7 @@ function renderThemeGrid() {
   THEMES.forEach((theme) => {
     const swatch = document.createElement("div");
     swatch.className = "theme-swatch" + (current === theme.id ? " active" : "");
+    swatch.tabIndex = 0;
     swatch.innerHTML = `
       <div class="swatch-dot" style="background: linear-gradient(135deg, ${theme.a}, ${theme.b});"></div>
       <div class="swatch-label">${theme.name}</div>
@@ -105,6 +122,8 @@ function renderThemeGrid() {
 
 settingsBtn.addEventListener("click", () => {
   renderThemeGrid();
+  refreshTmdbStatus();
+  renderControllerMap();
   settingsOverlay.classList.add("open");
 });
 
@@ -112,6 +131,37 @@ settingsCloseBtn.addEventListener("click", () => settingsOverlay.classList.remov
 
 settingsOverlay.addEventListener("click", (e) => {
   if (e.target === settingsOverlay) settingsOverlay.classList.remove("open");
+});
+
+async function refreshTmdbStatus() {
+  try {
+    const res = await fetch("/api/config");
+    const cfg = await res.json();
+    posterSearchEnabled = Boolean(cfg.posterSearchEnabled);
+    thumbSearchBtn.style.display = posterSearchEnabled ? "" : "none";
+    tmdbKeyInput.value = "";
+    tmdbKeyInput.placeholder = cfg.hasCustomKey ? "•••••••• (key saved)" : "TMDB API key";
+    tmdbStatus.textContent = posterSearchEnabled ? "Poster search is enabled." : "Poster search is off — add a key to enable it.";
+    tmdbStatus.classList.toggle("enabled", posterSearchEnabled);
+  } catch {
+    tmdbStatus.textContent = "Couldn't load status.";
+  }
+}
+
+tmdbSaveBtn.addEventListener("click", async () => {
+  const value = tmdbKeyInput.value.trim();
+  try {
+    const res = await fetch("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tmdbApiKey: value }),
+    });
+    const cfg = await res.json();
+    if (!res.ok) throw new Error(cfg.error || "Server error");
+    await refreshTmdbStatus();
+  } catch (err) {
+    tmdbStatus.textContent = "Couldn't save key: " + err.message;
+  }
 });
 
 function getBackgroundPlaySetting() {
@@ -130,9 +180,45 @@ backgroundToggle.addEventListener("click", () => {
 
 setBackgroundPlaySetting(getBackgroundPlaySetting());
 
+let privateFolderNames = new Set();
+
+function getUnlockToken(category) {
+  return sessionStorage.getItem(`homeflix-unlock-${category}`);
+}
+
+function setUnlockToken(category, token) {
+  sessionStorage.setItem(`homeflix-unlock-${category}`, token);
+}
+
+function buildTokensParam() {
+  const tokens = [];
+  privateFolderNames.forEach((cat) => {
+    const token = getUnlockToken(cat);
+    if (token) tokens.push({ category: cat, token });
+  });
+  if (tokens.length === 0) return "";
+  return "tokens=" + encodeURIComponent(JSON.stringify(tokens));
+}
+
+function withTokens(url) {
+  const param = buildTokensParam();
+  if (!param) return url;
+  return url + (url.includes("?") ? "&" : "?") + param;
+}
+
+async function loadPrivateFolderList() {
+  try {
+    const res = await fetch("/api/private-folders");
+    const names = await res.json();
+    privateFolderNames = new Set(names);
+  } catch {
+    privateFolderNames = new Set();
+  }
+}
+
 async function loadLibrary() {
   try {
-    const res = await fetch("/api/videos");
+    const res = await fetch(withTokens("/api/videos"));
     if (!res.ok) throw new Error("Server error " + res.status);
     allVideos = await res.json();
     renderCategories();
@@ -146,6 +232,7 @@ async function loadLibrary() {
 function renderCategories() {
   const all = new Set();
   allVideos.forEach((v) => v.tags.forEach((t) => all.add(t)));
+  privateFolderNames.forEach((t) => all.add(t));
   const cats = [...all].sort((a, b) => a.localeCompare(b));
 
   categoriesEl.innerHTML = "";
@@ -163,30 +250,231 @@ function renderCategories() {
   cats.forEach((cat) => {
     const wrap = document.createElement("div");
     wrap.className = "chip-wrap";
+    const isPrivate = privateFolderNames.has(cat);
+    const isUnlocked = !isPrivate || Boolean(getUnlockToken(cat));
 
     const chip = document.createElement("div");
     chip.className = "chip" + (activeCategory === cat ? " active" : "");
-    chip.textContent = cat;
+    chip.innerHTML = isPrivate ? `${ICONS.lock} ${escapeHtml(cat)}` : escapeHtml(cat);
     chip.addEventListener("click", () => {
+      if (isPrivate && !isUnlocked) {
+        openUnlockModal(cat);
+        return;
+      }
       activeCategory = activeCategory === cat ? null : cat;
       renderCategories();
       renderGrid();
     });
     wrap.appendChild(chip);
 
-    const addBtn = document.createElement("button");
-    addBtn.className = "chip-add";
-    addBtn.title = `Add videos to "${cat}"`;
-    addBtn.textContent = "+";
-    addBtn.addEventListener("click", (e) => {
+    if (isUnlocked) {
+      const addBtn = document.createElement("button");
+      addBtn.className = "chip-add";
+      addBtn.title = `Add videos to "${cat}"`;
+      addBtn.textContent = "+";
+      addBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startAssignMode(cat);
+      });
+      wrap.appendChild(addBtn);
+    }
+
+    const lockBtn = document.createElement("button");
+    lockBtn.className = "chip-add";
+    lockBtn.title = isPrivate ? `Manage privacy for "${cat}"` : `Make "${cat}" private`;
+    lockBtn.innerHTML = ICONS.lock;
+    lockBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      startAssignMode(cat);
+      openPrivacyModal(cat);
     });
-    wrap.appendChild(addBtn);
+    wrap.appendChild(lockBtn);
 
     categoriesEl.appendChild(wrap);
   });
 }
+
+let pendingUnlockCategory = null;
+
+function openUnlockModal(category) {
+  pendingUnlockCategory = category;
+  unlockModalTitle.textContent = `Unlock "${category}"`;
+  unlockModalDesc.textContent = "Enter the passcode to view this folder.";
+  unlockPasscodeInput.value = "";
+  unlockOverlay.classList.add("open");
+  unlockPasscodeInput.focus();
+}
+
+function closeUnlockModal() {
+  unlockOverlay.classList.remove("open");
+  pendingUnlockCategory = null;
+}
+
+async function submitUnlock() {
+  if (!pendingUnlockCategory) return;
+  const passcode = unlockPasscodeInput.value;
+
+  try {
+    const res = await fetch(`/api/private-folders/${encodeURIComponent(pendingUnlockCategory)}/unlock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passcode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Incorrect passcode");
+
+    setUnlockToken(pendingUnlockCategory, data.token);
+    activeCategory = pendingUnlockCategory;
+    closeUnlockModal();
+    await loadLibrary();
+  } catch (err) {
+    unlockModal.classList.remove("shake");
+    void unlockModal.offsetWidth;
+    unlockModal.classList.add("shake");
+    unlockModalDesc.textContent = err.message;
+    unlockPasscodeInput.value = "";
+    unlockPasscodeInput.focus();
+  }
+}
+
+unlockCancelBtn.addEventListener("click", closeUnlockModal);
+unlockSubmitBtn.addEventListener("click", submitUnlock);
+unlockPasscodeInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitUnlock();
+  if (e.key === "Escape") closeUnlockModal();
+});
+
+let pendingPrivacyCategory = null;
+
+function closePrivacyModal() {
+  privacyOverlay.classList.remove("open");
+  pendingPrivacyCategory = null;
+}
+
+function openPrivacyModal(category) {
+  pendingPrivacyCategory = category;
+  const isPrivate = privateFolderNames.has(category);
+  privacyModalTitle.textContent = `"${category}"`;
+
+  if (!isPrivate) {
+    privacyModalBody.innerHTML = `
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 14px">Set a passcode to hide this folder's videos until it's unlocked.</p>
+      <div class="privacy-field">
+        <label>Passcode (at least 4 characters)</label>
+        <input type="password" id="privacy-new-passcode">
+      </div>
+      <div class="privacy-field">
+        <label>Confirm passcode</label>
+        <input type="password" id="privacy-confirm-passcode">
+      </div>
+      <button class="privacy-action-btn" id="privacy-make-private-btn">Make Private</button>
+      <div class="privacy-error" id="privacy-error"></div>
+    `;
+    document.getElementById("privacy-make-private-btn").addEventListener("click", async () => {
+      const p1 = document.getElementById("privacy-new-passcode").value;
+      const p2 = document.getElementById("privacy-confirm-passcode").value;
+      const errorEl = document.getElementById("privacy-error");
+      if (p1.length < 4) return (errorEl.textContent = "Passcode must be at least 4 characters");
+      if (p1 !== p2) return (errorEl.textContent = "Passcodes don't match");
+
+      try {
+        const res = await fetch(`/api/private-folders/${encodeURIComponent(category)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ passcode: p1 }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Server error");
+
+        privateFolderNames.add(category);
+
+        const unlockRes = await fetch(`/api/private-folders/${encodeURIComponent(category)}/unlock`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ passcode: p1 }),
+        });
+        const unlockData = await unlockRes.json();
+        if (unlockRes.ok) setUnlockToken(category, unlockData.token);
+
+        closePrivacyModal();
+        await loadLibrary();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+  } else {
+    privacyModalBody.innerHTML = `
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 14px">This folder is private.</p>
+      <div class="privacy-field">
+        <label>Current passcode</label>
+        <input type="password" id="privacy-current-passcode">
+      </div>
+      <div class="privacy-field">
+        <label>New passcode</label>
+        <input type="password" id="privacy-new-passcode">
+      </div>
+      <button class="privacy-action-btn" id="privacy-change-btn">Change Passcode</button>
+      <div class="privacy-error" id="privacy-change-error"></div>
+      <hr style="border:none;border-top:1px solid var(--rule);margin:16px 0">
+      <div class="privacy-field">
+        <label>Current passcode</label>
+        <input type="password" id="privacy-remove-passcode">
+      </div>
+      <button class="privacy-action-btn danger" id="privacy-remove-btn">Remove Protection</button>
+      <div class="privacy-error" id="privacy-remove-error"></div>
+    `;
+
+    document.getElementById("privacy-change-btn").addEventListener("click", async () => {
+      const currentPasscode = document.getElementById("privacy-current-passcode").value;
+      const newPasscode = document.getElementById("privacy-new-passcode").value;
+      const errorEl = document.getElementById("privacy-change-error");
+      if (newPasscode.length < 4) return (errorEl.textContent = "New passcode must be at least 4 characters");
+
+      try {
+        const res = await fetch(`/api/private-folders/${encodeURIComponent(category)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPasscode, newPasscode }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Server error");
+        errorEl.style.color = "var(--teal)";
+        errorEl.textContent = "Passcode changed.";
+      } catch (err) {
+        errorEl.style.color = "";
+        errorEl.textContent = err.message;
+      }
+    });
+
+    document.getElementById("privacy-remove-btn").addEventListener("click", async () => {
+      const passcode = document.getElementById("privacy-remove-passcode").value;
+      const errorEl = document.getElementById("privacy-remove-error");
+
+      try {
+        const res = await fetch(`/api/private-folders/${encodeURIComponent(category)}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ passcode }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Server error");
+
+        privateFolderNames.delete(category);
+        sessionStorage.removeItem(`homeflix-unlock-${category}`);
+        closePrivacyModal();
+        await loadLibrary();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+  }
+
+  privacyOverlay.classList.add("open");
+}
+
+privacyCancelBtn.addEventListener("click", closePrivacyModal);
+privacyOverlay.addEventListener("click", (e) => {
+  if (e.target === privacyOverlay) closePrivacyModal();
+});
 
 function startAssignMode(category) {
   assignMode = category;
@@ -275,14 +563,14 @@ function renderGrid() {
     const badgeTag = v.tags[0];
     const extraTagsHtml = v.tags.slice(1).map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join("");
     const thumbStyle = v.hasThumbnail
-      ? ` style="background-image: url('/thumbnail/${encodeURIComponent(v.filename)}')"`
+      ? ` style="background-image: url('${withTokens("/thumbnail/" + encodeURIComponent(v.filename))}')"`
       : "";
 
     card.innerHTML = `
-      <button class="delete-btn" title="Delete video">✕</button>
-      <div class="assign-check">✓</div>
+      <button class="delete-btn" title="Delete video">${ICONS.close}</button>
+      <div class="assign-check">${ICONS.check}</div>
       <div class="card-thumb"${thumbStyle}>
-        ${v.hasThumbnail ? "" : `<span class="play-icon">${v.kind === "audio" ? "♪" : "▶"}</span>`}
+        ${v.hasThumbnail ? "" : `<span class="play-icon">${v.kind === "audio" ? ICONS.musicNote : ICONS.play}</span>`}
         <div class="card-thumb-overlay">
           ${badgeTag ? `<span class="card-badge">${escapeHtml(badgeTag)}</span>` : ""}
           <div class="card-thumb-title">${escapeHtml(v.title)}</div>
@@ -291,7 +579,7 @@ function renderGrid() {
       <div class="card-body">
         <div class="card-meta">
           <span>${formatSize(v.sizeBytes)}</span>
-          <button class="edit-tags-btn" title="Edit categories">🏷 edit</button>
+          <button class="edit-tags-btn" title="Edit categories">${ICONS.edit} edit</button>
         </div>
         ${extraTagsHtml ? `<div class="card-tags">${extraTagsHtml}</div>` : ""}
       </div>
@@ -340,7 +628,7 @@ searchInput.addEventListener("input", () => {
 
 function refreshThumbPreview(video) {
   if (video.hasThumbnail) {
-    thumbPreviewImg.src = `/thumbnail/${encodeURIComponent(video.filename)}?t=${Date.now()}`;
+    thumbPreviewImg.src = withTokens(`/thumbnail/${encodeURIComponent(video.filename)}`) + `&t=${Date.now()}`;
     thumbPreviewImg.classList.add("visible");
     thumbPreviewEmpty.classList.add("hidden");
     thumbRemoveBtn.style.display = "";
@@ -660,7 +948,7 @@ function openPlayer(video) {
     videoEl.style.display = "none";
     musicPlayer.classList.add("open");
 
-    audioEl.src = "/stream/" + encodeURIComponent(video.filename);
+    audioEl.src = withTokens("/stream/" + encodeURIComponent(video.filename));
     overlay.classList.add("open");
     audioEl.play();
     updateMediaSession(video);
@@ -679,7 +967,7 @@ function openPlayer(video) {
     backgroundBadge.classList.remove("active");
     videoEl.style.display = "";
 
-    videoEl.src = "/stream/" + encodeURIComponent(video.filename);
+    videoEl.src = withTokens("/stream/" + encodeURIComponent(video.filename));
     overlay.classList.add("open");
     videoEl.play();
     stopVisualizer();
@@ -797,6 +1085,90 @@ function stopVisualizer() {
   }
 }
 
+const GAMEPAD_ACTIONS = [
+  { key: "confirm", label: "Confirm / Select" },
+  { key: "back", label: "Back / Cancel" },
+  { key: "categoryPrev", label: "Previous category" },
+  { key: "categoryNext", label: "Next category" },
+  { key: "menu", label: "Open Settings" },
+  { key: "search", label: "Jump to search" },
+];
+
+const DEFAULT_GAMEPAD_MAP = {
+  confirm: 0,
+  back: 1,
+  categoryPrev: 4,
+  categoryNext: 5,
+  menu: 9,
+  search: 3,
+};
+
+const BUTTON_NAMES = {
+  0: "A / Cross",
+  1: "B / Circle",
+  2: "X / Square",
+  3: "Y / Triangle",
+  4: "LB / L1",
+  5: "RB / R1",
+  6: "LT / L2",
+  7: "RT / R2",
+  8: "Back / Select",
+  9: "Start / Options",
+  10: "L3 (stick click)",
+  11: "R3 (stick click)",
+  12: "D-pad Up",
+  13: "D-pad Down",
+  14: "D-pad Left",
+  15: "D-pad Right",
+  16: "Home / Guide",
+};
+
+function buttonName(index) {
+  return BUTTON_NAMES[index] || `Button ${index}`;
+}
+
+function getGamepadMap() {
+  try {
+    return { ...DEFAULT_GAMEPAD_MAP, ...JSON.parse(localStorage.getItem("homeflix-gamepad-map")) };
+  } catch {
+    return { ...DEFAULT_GAMEPAD_MAP };
+  }
+}
+
+function setGamepadMapAction(actionKey, buttonIndex) {
+  const map = getGamepadMap();
+  map[actionKey] = buttonIndex;
+  localStorage.setItem("homeflix-gamepad-map", JSON.stringify(map));
+}
+
+let remapListening = null;
+
+function renderControllerMap() {
+  const map = getGamepadMap();
+  controllerMapList.innerHTML = "";
+
+  GAMEPAD_ACTIONS.forEach((action) => {
+    const row = document.createElement("div");
+    row.className = "controller-row";
+
+    const isListening = remapListening === action.key;
+    row.innerHTML = `
+      <div>
+        <div class="controller-label">${action.label}</div>
+        <div class="controller-value">${isListening ? "Press a button…" : buttonName(map[action.key])}</div>
+      </div>
+      <button class="controller-remap-btn${isListening ? " listening" : ""}" type="button">${isListening ? "Waiting…" : "Remap"}</button>
+    `;
+
+    row.querySelector("button").addEventListener("click", () => {
+      remapListening = action.key;
+      renderControllerMap();
+    });
+
+    controllerMapList.appendChild(row);
+  });
+}
+
 let gamepadFocusIndex = 0;
 let gamepadConnected = false;
 const buttonState = {};
@@ -862,6 +1234,30 @@ function buttonPressed(index, pressed, now) {
   return fire;
 }
 
+function getActiveModalEl() {
+  if (unlockOverlay.classList.contains("open")) return unlockModal;
+  if (privacyOverlay.classList.contains("open")) return document.getElementById("privacy-modal");
+  if (settingsOverlay.classList.contains("open")) return document.getElementById("settings-modal");
+  if (tagModalOverlay.classList.contains("open")) return document.getElementById("tag-modal");
+  return null;
+}
+
+function getModalFocusables(root) {
+  return Array.from(root.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])')).filter(
+    (el) => el.offsetParent !== null && !el.disabled
+  );
+}
+
+let modalFocusIndex = 0;
+let lastActiveModalEl = null;
+
+function closeActiveModal(modalEl) {
+  if (modalEl.id === "unlock-modal") closeUnlockModal();
+  else if (modalEl.id === "privacy-modal") closePrivacyModal();
+  else if (modalEl.id === "settings-modal") settingsOverlay.classList.remove("open");
+  else if (modalEl.id === "tag-modal") closeTagEditor();
+}
+
 function pollGamepad() {
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   const pad = pads && pads[0];
@@ -874,8 +1270,20 @@ function pollGamepad() {
     }
 
     const now = performance.now();
-    const isModalOpen = tagModalOverlay.classList.contains("open");
-    const isPlayerOpen = overlay.classList.contains("open");
+    const map = getGamepadMap();
+
+    if (remapListening) {
+      for (let i = 0; i < pad.buttons.length; i++) {
+        if (pad.buttons[i].pressed && buttonPressed("remap-" + i, true, now)) {
+          setGamepadMapAction(remapListening, i);
+          remapListening = null;
+          renderControllerMap();
+          break;
+        }
+      }
+      requestAnimationFrame(pollGamepad);
+      return;
+    }
 
     const up = pad.buttons[12] && pad.buttons[12].pressed;
     const down = pad.buttons[13] && pad.buttons[13].pressed;
@@ -890,18 +1298,50 @@ function pollGamepad() {
     const dirLeft = left || stickX < -deadzone;
     const dirRight = right || stickX > deadzone;
 
-    const aBtn = pad.buttons[0] && pad.buttons[0].pressed;
-    const bBtn = pad.buttons[1] && pad.buttons[1].pressed;
-    const lb = pad.buttons[4] && pad.buttons[4].pressed;
-    const rb = pad.buttons[5] && pad.buttons[5].pressed;
+    const confirmBtn = pad.buttons[map.confirm] && pad.buttons[map.confirm].pressed;
+    const backBtn = pad.buttons[map.back] && pad.buttons[map.back].pressed;
+    const prevBtn = pad.buttons[map.categoryPrev] && pad.buttons[map.categoryPrev].pressed;
+    const nextBtn = pad.buttons[map.categoryNext] && pad.buttons[map.categoryNext].pressed;
+    const menuBtn = pad.buttons[map.menu] && pad.buttons[map.menu].pressed;
+    const searchBtn = pad.buttons[map.search] && pad.buttons[map.search].pressed;
 
-    if (isModalOpen) {
-      if (buttonPressed("modal-b", bBtn, now)) closeTagEditor();
-      if (buttonPressed("modal-a", aBtn, now)) saveTagEditor();
+    const activeModalEl = getActiveModalEl();
+    const isPlayerOpen = overlay.classList.contains("open");
+
+    if (activeModalEl) {
+      if (activeModalEl !== lastActiveModalEl) {
+        modalFocusIndex = 0;
+        lastActiveModalEl = activeModalEl;
+      }
+
+      const focusables = getModalFocusables(activeModalEl);
+      focusables.forEach((el) => el.classList.remove("gamepad-focus"));
+
+      if (focusables.length > 0) {
+        modalFocusIndex = ((modalFocusIndex % focusables.length) + focusables.length) % focusables.length;
+        focusables[modalFocusIndex].classList.add("gamepad-focus");
+        focusables[modalFocusIndex].scrollIntoView({ block: "nearest" });
+
+        if (buttonPressed("modal-down", dirDown || dirRight, now)) {
+          modalFocusIndex = (modalFocusIndex + 1) % focusables.length;
+        }
+        if (buttonPressed("modal-up", dirUp || dirLeft, now)) {
+          modalFocusIndex = (modalFocusIndex - 1 + focusables.length) % focusables.length;
+        }
+        if (buttonPressed("modal-confirm", confirmBtn, now)) {
+          const el = focusables[modalFocusIndex];
+          if (el.tagName === "INPUT") el.focus();
+          else el.click();
+        }
+      }
+
+      if (buttonPressed("modal-back", backBtn, now)) {
+        closeActiveModal(activeModalEl);
+      }
     } else if (isPlayerOpen) {
       const activeMedia = musicPlayer.classList.contains("open") ? audioEl : videoEl;
-      if (buttonPressed("player-b", bBtn, now)) closePlayer();
-      if (buttonPressed("player-a", aBtn, now)) {
+      if (buttonPressed("player-back", backBtn, now)) closePlayer();
+      if (buttonPressed("player-confirm", confirmBtn, now)) {
         if (activeMedia.paused) activeMedia.play(); else activeMedia.pause();
       }
       if (buttonPressed("player-left", dirLeft, now)) activeMedia.currentTime = Math.max(0, activeMedia.currentTime - 10);
@@ -909,14 +1349,13 @@ function pollGamepad() {
       if (buttonPressed("player-up", dirUp, now)) activeMedia.volume = Math.min(1, activeMedia.volume + 0.1);
       if (buttonPressed("player-down", dirDown, now)) activeMedia.volume = Math.max(0, activeMedia.volume - 0.1);
     } else {
-      const bBtnGrid = pad.buttons[1] && pad.buttons[1].pressed;
-      if (assignMode && buttonPressed("grid-b", bBtnGrid, now)) stopAssignMode();
+      if (assignMode && buttonPressed("grid-back", backBtn, now)) stopAssignMode();
 
       if (buttonPressed("grid-up", dirUp, now)) moveGamepadFocus(0, -1);
       if (buttonPressed("grid-down", dirDown, now)) moveGamepadFocus(0, 1);
       if (buttonPressed("grid-left", dirLeft, now)) moveGamepadFocus(-1, 0);
       if (buttonPressed("grid-right", dirRight, now)) moveGamepadFocus(1, 0);
-      if (buttonPressed("grid-a", aBtn, now)) {
+      if (buttonPressed("grid-confirm", confirmBtn, now)) {
         const cards = getCardEls();
         const card = cards[gamepadFocusIndex];
         if (card) {
@@ -927,8 +1366,10 @@ function pollGamepad() {
           }
         }
       }
-      if (buttonPressed("grid-lb", lb, now)) cycleCategory(-1);
-      if (buttonPressed("grid-rb", rb, now)) cycleCategory(1);
+      if (buttonPressed("grid-prev", prevBtn, now)) cycleCategory(-1);
+      if (buttonPressed("grid-next", nextBtn, now)) cycleCategory(1);
+      if (buttonPressed("grid-menu", menuBtn, now)) settingsBtn.click();
+      if (buttonPressed("grid-search", searchBtn, now)) searchInput.focus();
     }
   } else if (gamepadConnected) {
     gamepadConnected = false;
@@ -954,4 +1395,6 @@ document.documentElement.setAttribute("data-theme", getCurrentTheme());
 
 requestAnimationFrame(pollGamepad);
 
+refreshTmdbStatus();
+loadPrivateFolderList();
 loadLibrary();

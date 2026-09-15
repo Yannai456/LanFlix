@@ -685,7 +685,9 @@
     border: 1px solid var(--rule);
     border-radius: 6px;
     padding: 22px;
-    width: min(420px, 90vw);
+    width: min(440px, 90vw);
+    max-height: 85vh;
+    overflow-y: auto;
   }
 
   #settings-modal h3 {
@@ -698,6 +700,257 @@
     margin: 0 0 14px;
     font-size: 12px;
     color: var(--text-dim);
+  }
+
+  code {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 11px;
+  }
+
+  .tmdb-box {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+
+  .tmdb-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    margin: 0 0 10px;
+  }
+
+  .tmdb-desc a {
+    color: var(--teal);
+  }
+
+  .tmdb-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  #tmdb-key-input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 12px;
+    border-radius: 3px;
+    outline: none;
+    min-width: 0;
+  }
+
+  #tmdb-key-input:focus {
+    border-color: var(--teal);
+  }
+
+  #tmdb-save-btn {
+    background: var(--gradient);
+    border: none;
+    color: #04181a;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 9px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .tmdb-status {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+
+  .tmdb-status.enabled {
+    color: var(--teal);
+  }
+
+  .download-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .download-btn {
+    flex: 1;
+    text-align: center;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    color: var(--text);
+    font-size: 12px;
+    padding: 10px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .download-btn:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  .download-note {
+    font-size: 10.5px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0 0 16px;
+  }
+
+  .controller-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+
+  .controller-row .controller-label {
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .controller-row .controller-value {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .controller-remap-btn {
+    background: transparent;
+    border: 1px solid var(--rule);
+    color: var(--text);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .controller-remap-btn.listening {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  .controller-remap-btn:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  #unlock-modal-overlay, #privacy-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 35;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #unlock-modal-overlay.open, #privacy-modal-overlay.open {
+    display: flex;
+  }
+
+  #unlock-modal, #privacy-modal {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px;
+    width: min(360px, 90vw);
+  }
+
+  #unlock-modal h3, #privacy-modal h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  #unlock-modal p {
+    margin: 0 0 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  #unlock-passcode-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    color: var(--text);
+    font-size: 15px;
+    letter-spacing: 3px;
+    padding: 10px 12px;
+    border-radius: 3px;
+    outline: none;
+  }
+
+  #unlock-passcode-input:focus {
+    border-color: var(--teal);
+  }
+
+  #unlock-modal.shake {
+    animation: shake 0.3s;
+  }
+
+  @keyframes shake {
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+
+  .privacy-field {
+    margin-bottom: 12px;
+  }
+
+  .privacy-field input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 12px;
+    border-radius: 3px;
+    outline: none;
+    margin-top: 6px;
+  }
+
+  .privacy-field input:focus {
+    border-color: var(--teal);
+  }
+
+  .privacy-field label {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .privacy-action-btn {
+    background: var(--gradient);
+    border: none;
+    color: #04181a;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 9px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+
+  .privacy-action-btn.danger {
+    background: #c0503f;
+    color: #fff;
+  }
+
+  .privacy-error {
+    font-size: 11px;
+    color: #e0796a;
+    margin-top: 8px;
   }
 
   .toggle-row {
@@ -1270,8 +1523,53 @@
       <button id="background-toggle" class="toggle-switch" role="switch" aria-checked="false"><span class="toggle-knob"></span></button>
     </div>
 
+    <div class="field-label">Poster search</div>
+    <div class="tmdb-box">
+      <p class="tmdb-desc">Add a free <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">TMDB API key</a> to let the thumbnail editor search for real posters online. Optional — manual thumbnail upload always works without this.</p>
+      <div class="tmdb-row">
+        <input type="password" id="tmdb-key-input" placeholder="TMDB API key">
+        <button type="button" id="tmdb-save-btn">Save</button>
+      </div>
+      <div class="tmdb-status" id="tmdb-status"></div>
+    </div>
+
+    <div class="field-label">Desktop app</div>
+    <p style="margin-top:-8px">Download a launcher that opens homeflix in its own window, no browser bar — pick your OS:</p>
+    <div class="download-row">
+      <a href="/api/download/linux" download class="download-btn" tabindex="0">Linux</a>
+      <a href="/api/download/windows" download class="download-btn" tabindex="0">Windows</a>
+      <a href="/api/download/mac" download class="download-btn" tabindex="0">macOS</a>
+    </div>
+    <p class="download-note">These are small launcher scripts (not installers) that open homeflix using a browser already on your device. Linux: move the downloaded file into <code>~/.local/share/applications/</code> to get it in your app menu. Windows: double-click the <code>.bat</code> file, or right-click → Create shortcut and pin that. macOS: double-click the <code>.command</code> file (you may need to allow it once in System Settings → Privacy &amp; Security).</p>
+
+    <div class="field-label">Controller</div>
+    <p style="margin-top:-8px">D-pad / left stick always navigates. Remap the action buttons below — click Remap, then press the button you want on your controller.</p>
+    <div id="controller-map-list"></div>
+
     <div class="modal-actions">
       <button id="settings-close">DONE</button>
+    </div>
+  </div>
+</div>
+
+<div id="unlock-modal-overlay">
+  <div id="unlock-modal">
+    <h3 id="unlock-modal-title">Enter passcode</h3>
+    <p id="unlock-modal-desc">This folder is private.</p>
+    <input type="password" id="unlock-passcode-input" placeholder="Passcode" inputmode="numeric">
+    <div class="modal-actions" style="margin-top:14px">
+      <button id="unlock-cancel">CANCEL</button>
+      <button id="unlock-submit">UNLOCK</button>
+    </div>
+  </div>
+</div>
+
+<div id="privacy-modal-overlay">
+  <div id="privacy-modal">
+    <h3 id="privacy-modal-title">Folder privacy</h3>
+    <div id="privacy-modal-body"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button id="privacy-cancel">CLOSE</button>
     </div>
   </div>
 </div>
