@@ -25,7 +25,7 @@ LAN.
 
 6. From any device on your home network, open a browser and go to:
    ```
-   http:<Your server Lan IP>:<Your server's Port>
+   http://192.168.1.50:8000
    ```
 
 ## Music player with animated bars
@@ -113,6 +113,75 @@ reload the page once so it takes full effect.
 Tiles are smaller and denser on narrow screens (under 640px wide) so more
 fit per row and it's quicker to scroll/swipe through a big library on a
 phone.
+
+## Cache nodes (LAN caching, optional)
+
+For a larger house, you can run small "cache node" helper servers on other
+machines around the house (a laptop, a Raspberry Pi, an old PC) so videos
+get served from something physically closer to where they're being
+watched, instead of always crossing the whole house back to the main
+server. This is genuinely most useful when part of your network has weak
+WiFi backhaul (like a mesh extender) — a cache node on that same segment
+means devices there only cross the weak link once, not twice.
+
+**How it works, end to end:**
+
+1. The main server advertises itself on the LAN via **mDNS** (the same
+   protocol behind AirPlay/Chromecast/network-printer discovery) — no
+   manual IP configuration needed on the cache node's side.
+2. When you start `cache-node.js` on another machine, it listens for that
+   mDNS announcement, finds the main server automatically, and registers
+   itself back with it using a shared pairing secret (printed in the main
+   server's terminal output on startup — you'll need to copy that value).
+3. The main server keeps a live list of registered cache nodes (with a
+   heartbeat — nodes that go quiet for 45 seconds drop off the list
+   automatically) and exposes it at `/api/cache-nodes`.
+4. When you load the library in your browser, it fetches that list and
+   does a quick health-check race against each node to find the
+   fastest-responding one for your current location on the network.
+5. Playback for eligible videos routes through that node instead of the
+   main server. The node uses a **pull-through cache**: the first request
+   for a file fetches it from the main server and saves a local copy;
+   every request after that is served entirely locally, no trip back to
+   the main server at all.
+6. Cache nodes use **LRU eviction** — when local storage fills up (default
+   cap 20GB, configurable), the least-recently-watched cached file is
+   deleted first to make room.
+7. Cache nodes periodically check a "library version" number on the main
+   server. If anything changes there (a video renamed, deleted, or a
+   folder made private), the version changes and any now-stale cached
+   copies are deleted automatically — this is the cache invalidation piece.
+
+**Private folders are never cached**, on purpose: the main server's
+cache-facing endpoints refuse to hand over anything tagged with a private
+category, regardless of whether you've currently unlocked it in your own
+session. Cache nodes have no concept of your passcode/unlock tokens at
+all, so private videos always stream directly from the main server only.
+
+**To run a cache node**, on another machine on the same network:
+```
+git clone (or copy) this project to that machine
+npm install
+CACHE_SECRET="paste-the-secret-from-the-main-server's-startup-log" node cache-node.js
+```
+Optional environment variables:
+- `CACHE_PORT` — defaults to 8100
+- `CACHE_DIR` — where cached files are stored, defaults to `cache-storage/` next to `cache-node.js`
+- `CACHE_MAX_MB` — cache size cap in megabytes, defaults to 20000 (20GB)
+- `MAIN_SERVER_URL` — set this to skip mDNS discovery and connect directly, e.g. if mDNS is blocked on your network/VLAN
+
+You can run more than one cache node (one per floor or problem area). See
+Settings → Cache nodes to check which ones are currently discovered and
+which one is actively being used.
+
+**Being honest about when this actually helps:** if your slowdown is
+really a WiFi coverage problem in one room, a cache node sitting in that
+same room still has to cross that same weak WiFi link to reach a device
+there — caching doesn't fix a weak radio link, better AP placement or
+wired backhaul does. This is most useful when the *main server itself* is
+the bottleneck (e.g. multiple people streaming simultaneously maxing out
+its disk or network), or specifically when a room's WiFi is a repeated
+extender hop where local caching avoids crossing that hop twice.
 
 ## Loading performance
 

@@ -5,6 +5,7 @@ const os = require("os");
 const crypto = require("crypto");
 const multer = require("multer");
 const archiver = require("archiver");
+const { Bonjour } = require("bonjour-service");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -15,6 +16,7 @@ const THUMBS_FILE = path.join(VIDEO_DIR, ".homeflix-thumbnails.json");
 const CONFIG_FILE = path.join(VIDEO_DIR, ".homeflix-config.json");
 const PRIVATE_FILE = path.join(VIDEO_DIR, ".homeflix-private.json");
 const SECRET_FILE = path.join(VIDEO_DIR, ".homeflix-secret");
+const CACHE_SECRET_FILE = path.join(VIDEO_DIR, ".homeflix-cache-secret");
 const DOWNLOADS_DIR = path.join(__dirname, "downloads");
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".mkv", ".mov", ".m4v"]);
@@ -25,20 +27,6 @@ app.use(express.json());
 
 fs.mkdirSync(VIDEO_DIR, { recursive: true });
 fs.mkdirSync(THUMBS_DIR, { recursive: true });
-
-function getLanIP() {
-    const interfaces = os.networkInterfaces();
-
-    for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                return iface.address;
-            }
-        }
-    }
-
-    return 'localhost';
-}
 
 function loadTags() {
   try {
@@ -107,6 +95,37 @@ function getSecret() {
     fs.writeFileSync(SECRET_FILE, secret);
     return secret;
   }
+}
+
+function getCacheSecret() {
+  try {
+    return fs.readFileSync(CACHE_SECRET_FILE, "utf8").trim();
+  } catch {
+    const secret = crypto.randomBytes(24).toString("hex");
+    fs.writeFileSync(CACHE_SECRET_FILE, secret);
+    return secret;
+  }
+}
+
+let libraryVersion = Date.now();
+
+function bumpLibraryVersion() {
+  libraryVersion = Date.now();
+}
+
+const cacheNodes = new Map();
+const CACHE_NODE_TIMEOUT_MS = 45 * 1000;
+
+function registerCacheNode(id, address, port) {
+  cacheNodes.set(id, { id, address, port, lastSeen: Date.now() });
+}
+
+function getLiveCacheNodes() {
+  const now = Date.now();
+  for (const [id, node] of cacheNodes) {
+    if (now - node.lastSeen > CACHE_NODE_TIMEOUT_MS) cacheNodes.delete(id);
+  }
+  return [...cacheNodes.values()];
 }
 
 function hashPasscode(passcode, salt) {
@@ -278,6 +297,7 @@ app.post("/api/private-folders/:category", (req, res) => {
   const salt = crypto.randomBytes(16).toString("hex");
   store[category] = { salt, hash: hashPasscode(passcode, salt) };
   savePrivate(store);
+  bumpLibraryVersion();
   res.json({ category, private: true });
 });
 
@@ -317,6 +337,7 @@ app.delete("/api/private-folders/:category", (req, res) => {
 
   delete store[category];
   savePrivate(store);
+  bumpLibraryVersion();
   res.json({ category, private: false });
 });
 
@@ -398,6 +419,7 @@ app.put("/api/videos/:filename/tags", (req, res) => {
     tags[filename] = cleaned;
   }
   saveTags(tags);
+  bumpLibraryVersion();
 
   res.json({ filename, tags: cleaned });
 });
@@ -641,6 +663,71 @@ open "${url}"
 
 app.use("/downloads", express.static(DOWNLOADS_DIR));
 
+function requireCacheSecret(req, res, next) {
+  const provided = req.headers["x-cache-secret"];
+  if (provided !== getCacheSecret()) {
+    return res.status(401).json({ error: "Invalid or missing cache secret" });
+  }
+  next();
+}
+
+app.post("/internal/register-cache-node", requireCacheSecret, (req, res) => {
+  const { id, port } = req.body;
+  const address = req.socket.remoteAddress.replace("::ffff:", "");
+  if (!id || !port) {
+    return res.status(400).json({ error: "Missing id or port" });
+  }
+  registerCacheNode(id, address, port);
+  res.json({ ok: true, libraryVersion });
+});
+
+app.get("/api/cache-nodes", (req, res) => {
+  const nodes = getLiveCacheNodes().map((n) => ({ id: n.id, address: n.address, port: n.port }));
+  res.json({ nodes, libraryVersion });
+});
+
+app.get("/internal/cache-manifest", requireCacheSecret, (req, res) => {
+  const tags = loadTags();
+  const privateStore = loadPrivate();
+
+  fs.readdir(VIDEO_DIR, { withFileTypes: true }, (err, entries) => {
+    if (err) return res.status(500).json({ error: "Could not read video folder" });
+
+    const cacheable = entries
+      .filter((e) => e.isFile() && MEDIA_EXTENSIONS.has(path.extname(e.name).toLowerCase()))
+      .map((e) => e.name)
+      .filter((filename) => {
+        const videoTags = tags[filename] || [];
+        return !videoTags.some((t) => privateStore[t]);
+      });
+
+    res.json({ libraryVersion, filenames: cacheable });
+  });
+});
+
+app.get("/internal/cache-fetch/:filename", requireCacheSecret, (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(VIDEO_DIR, filename);
+
+  if (!MEDIA_EXTENSIONS.has(path.extname(filename).toLowerCase())) {
+    return res.status(400).json({ error: "Not a supported media file" });
+  }
+
+  const tags = loadTags();
+  const privateStore = loadPrivate();
+  const videoTags = tags[filename] || [];
+  if (videoTags.some((t) => privateStore[t])) {
+    return res.status(403).json({ error: "This video is private and cannot be cached" });
+  }
+
+  fs.stat(filePath, (err, stats) => {
+    if (err) return res.status(404).json({ error: "File not found" });
+    res.setHeader("Content-Length", stats.size);
+    res.setHeader("Content-Type", getContentType(filename));
+    fs.createReadStream(filePath).pipe(res);
+  });
+});
+
 app.post("/api/upload", (req, res) => {
   upload.single("video")(req, res, (err) => {
     if (err) {
@@ -650,6 +737,7 @@ app.post("/api/upload", (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No file received" });
     }
+    bumpLibraryVersion();
     res.json({ filename: req.file.filename });
   });
 });
@@ -700,6 +788,7 @@ app.put("/api/videos/:filename/rename", (req, res) => {
       saveThumbs(thumbs);
     }
 
+    bumpLibraryVersion();
     res.json({ oldFilename, newFilename });
   });
 });
@@ -731,6 +820,7 @@ app.delete("/api/videos/:filename", (req, res) => {
       saveThumbs(thumbs);
     }
 
+    bumpLibraryVersion();
     res.json({ deleted: filename });
   });
 });
@@ -830,9 +920,15 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`\nLan flix running`);
   console.log(`  Serving folder: ${VIDEO_DIR}`);
   console.log(`  Local:   http://localhost:${PORT}`);
-  console.log(`  Network: http://${getLanIP()}:${PORT}\n`);
+  console.log(`  Network: http://<this-machine's-LAN-IP>:${PORT}\n`);
 
   generateDesktopAppDownloads()
     .then(() => console.log("Desktop app downloads ready in /downloads"))
     .catch((err) => console.error("Could not generate desktop app downloads:", err.message));
+
+  const bonjour = new Bonjour();
+  bonjour.publish({ name: "Lan flix", type: "lanflix", port: Number(PORT) });
+  console.log(`Advertising on the LAN as _lanflix._tcp (mDNS) — cache nodes can auto-discover this server.`);
+  console.log(`Cache node pairing secret: ${getCacheSecret()}`);
+  console.log(`(You'll need this exact value when starting a cache-node.js on another machine.)\n`);
 });

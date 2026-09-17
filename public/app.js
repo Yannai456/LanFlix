@@ -137,8 +137,36 @@ settingsBtn.addEventListener("click", () => {
   renderThemeGrid();
   refreshTmdbStatus();
   renderControllerMap();
+  renderCacheNodeStatus();
   settingsOverlay.classList.add("open");
 });
+
+async function renderCacheNodeStatus() {
+  const el = document.getElementById("cache-node-list");
+  if (!el) return;
+  el.innerHTML = `<div class="controller-value">Checking for cache nodes on the LAN…</div>`;
+  await refreshCacheNodes();
+
+  if (discoveredCacheNodes.length === 0) {
+    el.innerHTML = `<div class="controller-value">None found. Run cache-node.js on another machine on this network to add one.</div>`;
+    return;
+  }
+
+  el.innerHTML = discoveredCacheNodes
+    .map((n) => {
+      const isBest = bestCacheNode && bestCacheNode.id === n.id;
+      const latency = isBest ? `${Math.round(bestCacheNode.latencyMs)}ms` : "unreachable or slower";
+      return `
+        <div class="controller-row">
+          <div>
+            <div class="controller-label">${escapeHtml(n.address)}:${n.port}</div>
+            <div class="controller-value">${isBest ? `Active — ${latency}` : latency}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
 
 settingsCloseBtn.addEventListener("click", () => settingsOverlay.classList.remove("open"));
 
@@ -227,6 +255,48 @@ async function loadPrivateFolderList() {
   } catch {
     privateFolderNames = new Set();
   }
+}
+
+let discoveredCacheNodes = [];
+let bestCacheNode = null;
+
+async function probeNode(node) {
+  const start = performance.now();
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1000);
+    const res = await fetch(`http://${node.address}:${node.port}/status`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return { ...node, latencyMs: performance.now() - start };
+  } catch {
+    return null;
+  }
+}
+
+async function refreshCacheNodes() {
+  try {
+    const res = await fetch("/api/cache-nodes");
+    const data = await safeJson(res);
+    discoveredCacheNodes = data.nodes || [];
+
+    const probes = (await Promise.all(discoveredCacheNodes.map(probeNode))).filter(Boolean);
+    probes.sort((a, b) => a.latencyMs - b.latencyMs);
+    bestCacheNode = probes[0] || null;
+  } catch {
+    discoveredCacheNodes = [];
+    bestCacheNode = null;
+  }
+}
+
+function videoHasPrivateTag(video) {
+  return video.tags.some((t) => privateFolderNames.has(t));
+}
+
+function getStreamUrl(video) {
+  const directUrl = withTokens("/stream/" + encodeURIComponent(video.filename));
+  if (!bestCacheNode || videoHasPrivateTag(video)) return directUrl;
+  return `http://${bestCacheNode.address}:${bestCacheNode.port}/video/${encodeURIComponent(video.filename)}`;
 }
 
 async function loadLibrary() {
@@ -961,7 +1031,7 @@ function openPlayer(video) {
     videoEl.style.display = "none";
     musicPlayer.classList.add("open");
 
-    audioEl.src = withTokens("/stream/" + encodeURIComponent(video.filename));
+    audioEl.src = getStreamUrl(video);
     overlay.classList.add("open");
     audioEl.play();
     updateMediaSession(video);
@@ -980,7 +1050,7 @@ function openPlayer(video) {
     backgroundBadge.classList.remove("active");
     videoEl.style.display = "";
 
-    videoEl.src = withTokens("/stream/" + encodeURIComponent(video.filename));
+    videoEl.src = getStreamUrl(video);
     overlay.classList.add("open");
     videoEl.play();
     stopVisualizer();
@@ -1411,3 +1481,6 @@ requestAnimationFrame(pollGamepad);
 refreshTmdbStatus();
 loadPrivateFolderList();
 loadLibrary();
+
+refreshCacheNodes();
+setInterval(refreshCacheNodes, 30 * 1000);
