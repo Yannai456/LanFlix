@@ -20,6 +20,36 @@ async function safeJson(res) {
   }
 }
 
+const debugLogEntries = [];
+const DEBUG_LOG_MAX = 300;
+
+function debugLog(message, level) {
+  const entry = { time: new Date(), message, level: level || "info" };
+  debugLogEntries.push(entry);
+  if (debugLogEntries.length > DEBUG_LOG_MAX) debugLogEntries.shift();
+  renderDebugLog();
+}
+
+function renderDebugLog() {
+  const el = document.getElementById("debug-log");
+  if (!el || !document.getElementById("settings-modal-overlay").classList.contains("open")) return;
+
+  if (debugLogEntries.length === 0) {
+    el.innerHTML = `<div class="debug-log-entry">No events logged yet.</div>`;
+    return;
+  }
+
+  el.innerHTML = debugLogEntries
+    .slice()
+    .reverse()
+    .map((e) => {
+      const t = e.time.toTimeString().slice(0, 8);
+      const cls = e.level === "error" ? " debug-error" : e.level === "ok" ? " debug-ok" : "";
+      return `<div class="debug-log-entry${cls}"><span class="debug-time">${t}</span>${escapeHtml(e.message)}</div>`;
+    })
+    .join("");
+}
+
 const grid = document.getElementById("grid");
 const status = document.getElementById("status");
 const overlay = document.getElementById("player-overlay");
@@ -61,6 +91,12 @@ const backgroundBadge = document.getElementById("background-badge");
 const bufferSpinner = document.getElementById("buffer-spinner");
 const musicSpinner = document.getElementById("music-spinner");
 const backgroundToggle = document.getElementById("background-toggle");
+const debugToggleBtn = document.getElementById("debug-toggle-btn");
+const debugChevron = document.getElementById("debug-chevron");
+const debugSubmenu = document.getElementById("debug-submenu");
+const forceCacheToggle = document.getElementById("force-cache-toggle");
+const debugLogEl = document.getElementById("debug-log");
+const debugLogClearBtn = document.getElementById("debug-log-clear");
 const tmdbKeyInput = document.getElementById("tmdb-key-input");
 const tmdbSaveBtn = document.getElementById("tmdb-save-btn");
 const tmdbStatus = document.getElementById("tmdb-status");
@@ -139,6 +175,7 @@ settingsBtn.addEventListener("click", () => {
   renderControllerMap();
   renderCacheNodeStatus();
   settingsOverlay.classList.add("open");
+  renderDebugLog();
 });
 
 async function renderCacheNodeStatus() {
@@ -219,6 +256,34 @@ backgroundToggle.addEventListener("click", () => {
   setBackgroundPlaySetting(!getBackgroundPlaySetting());
 });
 
+debugToggleBtn.addEventListener("click", () => {
+  const isOpen = debugSubmenu.classList.toggle("open");
+  debugChevron.classList.toggle("open", isOpen);
+  if (isOpen) renderDebugLog();
+});
+
+function getForceCacheSetting() {
+  return localStorage.getItem("homeflix-force-cache") === "on";
+}
+
+function setForceCacheSetting(on, { silent } = {}) {
+  localStorage.setItem("homeflix-force-cache", on ? "on" : "off");
+  forceCacheToggle.classList.toggle("on", on);
+  forceCacheToggle.setAttribute("aria-checked", on ? "true" : "false");
+  if (!silent) debugLog(`Force cache node playback turned ${on ? "ON" : "off"}`);
+}
+
+forceCacheToggle.addEventListener("click", () => {
+  setForceCacheSetting(!getForceCacheSetting());
+});
+
+setForceCacheSetting(getForceCacheSetting(), { silent: true });
+
+debugLogClearBtn.addEventListener("click", () => {
+  debugLogEntries.length = 0;
+  renderDebugLog();
+});
+
 setBackgroundPlaySetting(getBackgroundPlaySetting());
 
 let privateFolderNames = new Set();
@@ -267,9 +332,15 @@ async function probeNode(node) {
     const timer = setTimeout(() => controller.abort(), 1000);
     const res = await fetch(`http://${node.address}:${node.port}/status`, { signal: controller.signal });
     clearTimeout(timer);
-    if (!res.ok) return null;
-    return { ...node, latencyMs: performance.now() - start };
-  } catch {
+    if (!res.ok) {
+      debugLog(`Probe ${node.address}:${node.port} — bad response (${res.status})`, "error");
+      return null;
+    }
+    const latencyMs = performance.now() - start;
+    debugLog(`Probe ${node.address}:${node.port} — OK, ${Math.round(latencyMs)}ms`, "ok");
+    return { ...node, latencyMs };
+  } catch (err) {
+    debugLog(`Probe ${node.address}:${node.port} — unreachable (${err.message})`, "error");
     return null;
   }
 }
@@ -280,12 +351,25 @@ async function refreshCacheNodes() {
     const data = await safeJson(res);
     discoveredCacheNodes = data.nodes || [];
 
+    if (discoveredCacheNodes.length === 0) {
+      bestCacheNode = null;
+      return;
+    }
+
+    debugLog(`Found ${discoveredCacheNodes.length} cache node(s) registered, probing…`);
     const probes = (await Promise.all(discoveredCacheNodes.map(probeNode))).filter(Boolean);
     probes.sort((a, b) => a.latencyMs - b.latencyMs);
     bestCacheNode = probes[0] || null;
-  } catch {
+
+    if (bestCacheNode) {
+      debugLog(`Selected fastest cache node: ${bestCacheNode.address}:${bestCacheNode.port} (${Math.round(bestCacheNode.latencyMs)}ms)`, "ok");
+    } else {
+      debugLog(`No cache nodes responded — will use the main server directly`, "error");
+    }
+  } catch (err) {
     discoveredCacheNodes = [];
     bestCacheNode = null;
+    debugLog(`Could not fetch cache node list: ${err.message}`, "error");
   }
 }
 
@@ -295,7 +379,26 @@ function videoHasPrivateTag(video) {
 
 function getStreamUrl(video) {
   const directUrl = withTokens("/stream/" + encodeURIComponent(video.filename));
-  if (!bestCacheNode || videoHasPrivateTag(video)) return directUrl;
+
+  if (videoHasPrivateTag(video)) {
+    debugLog(`"${video.title}" is in a private folder — always using main server directly`);
+    return directUrl;
+  }
+
+  const forceCache = getForceCacheSetting();
+
+  if (forceCache && discoveredCacheNodes.length > 0) {
+    const node = bestCacheNode || discoveredCacheNodes[0];
+    debugLog(`Force cache node ON — routing "${video.title}" through ${node.address}:${node.port} (unverified)`);
+    return `http://${node.address}:${node.port}/video/${encodeURIComponent(video.filename)}`;
+  }
+
+  if (!bestCacheNode) {
+    debugLog(`Playing "${video.title}" directly from main server (no healthy cache node)`);
+    return directUrl;
+  }
+
+  debugLog(`Playing "${video.title}" via cache node ${bestCacheNode.address}:${bestCacheNode.port}`, "ok");
   return `http://${bestCacheNode.address}:${bestCacheNode.port}/video/${encodeURIComponent(video.filename)}`;
 }
 
@@ -306,9 +409,11 @@ async function loadLibrary() {
     allVideos = await safeJson(res);
     renderCategories();
     renderGrid();
+    debugLog(`Loaded library: ${allVideos.length} item(s) visible`);
   } catch (err) {
     status.style.display = "block";
     status.textContent = "Couldn't load the library: " + err.message;
+    debugLog(`Failed to load library: ${err.message}`, "error");
   }
 }
 
@@ -988,11 +1093,19 @@ videoEl.addEventListener("waiting", () => bufferSpinner.classList.add("active"))
 videoEl.addEventListener("loadstart", () => bufferSpinner.classList.add("active"));
 videoEl.addEventListener("playing", () => bufferSpinner.classList.remove("active"));
 videoEl.addEventListener("canplay", () => bufferSpinner.classList.remove("active"));
+videoEl.addEventListener("error", () => {
+  const code = videoEl.error ? videoEl.error.code : "unknown";
+  debugLog(`Video playback error (code ${code}) for ${videoEl.src}`, "error");
+});
 
 audioEl.addEventListener("waiting", () => musicSpinner.classList.add("active"));
 audioEl.addEventListener("loadstart", () => musicSpinner.classList.add("active"));
 audioEl.addEventListener("playing", () => musicSpinner.classList.remove("active"));
 audioEl.addEventListener("canplay", () => musicSpinner.classList.remove("active"));
+audioEl.addEventListener("error", () => {
+  const code = audioEl.error ? audioEl.error.code : "unknown";
+  debugLog(`Audio playback error (code ${code}) for ${audioEl.src}`, "error");
+});
 
 function updateMediaSession(video) {
   if (!("mediaSession" in navigator)) return;
@@ -1463,15 +1576,17 @@ function pollGamepad() {
   requestAnimationFrame(pollGamepad);
 }
 
-window.addEventListener("gamepadconnected", () => {
+window.addEventListener("gamepadconnected", (e) => {
   gamepadConnected = true;
   gamepadIndicator.classList.add("connected");
   resetGamepadFocus();
+  debugLog(`Controller connected: ${e.gamepad.id}`, "ok");
 });
 
 window.addEventListener("gamepaddisconnected", () => {
   gamepadConnected = false;
   gamepadIndicator.classList.remove("connected");
+  debugLog(`Controller disconnected`);
 });
 
 document.documentElement.setAttribute("data-theme", getCurrentTheme());

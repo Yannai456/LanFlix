@@ -183,6 +183,30 @@ the bottleneck (e.g. multiple people streaming simultaneously maxing out
 its disk or network), or specifically when a room's WiFi is a repeated
 extender hop where local caching avoids crossing that hop twice.
 
+## Debug submenu
+
+Settings has a collapsed **Debug** section (click it to expand) with two
+things useful while setting up or troubleshooting cache nodes:
+
+- **Force cache node playback** — normally, playback only routes through a
+  cache node if it responded to a quick health-check faster than going
+  straight to the main server would. This toggle skips that check and
+  always tries the first known cache node for eligible videos, even
+  unconfirmed. Useful for confirming a cache node actually works, or for
+  testing one that's deliberately far/slow. It never applies to
+  private-folder videos, and still falls back to the main server if no
+  cache node is known at all.
+- **Event log** — a running, timestamped log of what the client is doing:
+  cache node discovery and health-check results, which server each video
+  played from and why, library load results, controller connect/disconnect,
+  and playback errors. Clears on page reload, or with the Clear button.
+
+The cache node program (`cache-node.js`) also logs actively to its own
+terminal — every request it gets (cache **HIT** or **MISS**, with timing
+and the requesting device's IP), heartbeats to the main server, eviction
+events, and library-change/invalidation checks. Watching that terminal
+while testing is the fastest way to see the whole system actually working.
+
 ## Loading performance
 
 A few things happen under the hood to make playback start faster and repeat

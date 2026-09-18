@@ -846,6 +846,107 @@
     color: var(--teal);
   }
 
+  .debug-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .debug-toggle-btn:hover {
+    color: var(--text);
+  }
+
+  #debug-chevron {
+    display: inline-block;
+    transition: transform 0.15s ease;
+    font-size: 9px;
+  }
+
+  #debug-chevron.open {
+    transform: rotate(90deg);
+  }
+
+  #debug-submenu {
+    display: none;
+    margin-top: 10px;
+  }
+
+  #debug-submenu.open {
+    display: block;
+  }
+
+  .debug-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 14px 0 6px;
+  }
+
+  .debug-log-header span {
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+  }
+
+  .debug-log-header button {
+    background: transparent;
+    border: 1px solid var(--rule);
+    color: var(--text-dim);
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .debug-log-header button:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  #debug-log {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 8px 10px;
+    max-height: 220px;
+    overflow-y: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 10.5px;
+    line-height: 1.6;
+  }
+
+  .debug-log-entry {
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-bottom: 1px solid var(--rule);
+    padding: 4px 0;
+  }
+
+  .debug-log-entry:last-child {
+    border-bottom: none;
+  }
+
+  .debug-log-entry .debug-time {
+    color: var(--accent-dim);
+    margin-right: 6px;
+  }
+
+  .debug-log-entry.debug-error {
+    color: #e0796a;
+  }
+
+  .debug-log-entry.debug-ok {
+    color: var(--teal);
+  }
+
   #unlock-modal-overlay, #privacy-modal-overlay {
     display: none;
     position: fixed;
@@ -1447,7 +1548,7 @@
 <header>
   <div class="brand-block">
     <div class="brand">Lan flix</div>
-    <div class="tagline">Local Network Streaming</div>
+    <div class="tagline">your movies, your network</div>
   </div>
   <div class="header-controls">
     <input type="text" id="search-input" placeholder="Search…">
@@ -1548,6 +1649,25 @@
     <div class="field-label">Cache nodes (LAN)</div>
     <p style="margin-top:-8px">Optional helper servers you run on other machines around the house to cache videos closer to where they're watched. Playback automatically uses the fastest-responding one when available. Private-folder videos are never cached.</p>
     <div id="cache-node-list"></div>
+
+    <div class="field-label">
+      <button type="button" id="debug-toggle-btn" class="debug-toggle-btn">Debug <span id="debug-chevron">▸</span></button>
+    </div>
+    <div id="debug-submenu">
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-title">Force cache node playback</div>
+          <div class="toggle-desc">Skip the speed race and always use a discovered cache node for eligible videos, even if it hasn't been confirmed as the fastest. Useful for testing whether a cache node actually works. Falls back to the main server if none are discovered at all, or for private-folder videos.</div>
+        </div>
+        <button id="force-cache-toggle" class="toggle-switch" role="switch" aria-checked="false"><span class="toggle-knob"></span></button>
+      </div>
+
+      <div class="debug-log-header">
+        <span>Event log</span>
+        <button type="button" id="debug-log-clear">Clear</button>
+      </div>
+      <div id="debug-log"></div>
+    </div>
 
     <div class="modal-actions">
       <button id="settings-close">Done</button>
